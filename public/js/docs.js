@@ -501,6 +501,25 @@
     return (toc ? '<nav class="doc-toc" aria-label="本讲目录">' + toc + '</nav>' : '') + body;
   }
 
+  /* 阅读器内的原论文引用块：离线只展示元数据与链接，不发请求 */
+  function paperSection(key) {
+    const P = NS.papers;
+    const p = P && P.getPaper && P.getPaper(key);
+    if (!p || !p.title) return '';
+    const v = (P.getVerify && P.getVerify(key)) || { status: 'unverified' };
+    const statusText = { verified: '已核验', suspect: '存疑', unreachable: '链接不可达', unverified: '待核验' }[v.status] || '待核验';
+    const url = /^https?:\/\//i.test(p.url || '') ? p.url : '';
+    return '<section class="doc-paper">' +
+      '<h3 class="doc-paper-h">原论文出处 <span class="paper-status is-' + esc(v.status) + '">' + esc(statusText) + '</span></h3>' +
+      '<p class="doc-paper-title">' + esc(p.title) + '</p>' +
+      '<p class="doc-paper-meta">' + esc(p.authors || '作者未标注') + ' · ' + esc(p.journal || '出处未标注') + '</p>' +
+      (v.reason ? '<p class="paper-reason">核验说明：' + esc(v.reason) + '</p>' : '') +
+      (url ? '<p><a class="paper-link" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' +
+        '查看原文（新标签打开，离线环境不自动请求） ↗</a></p>' : '<p class="paper-link is-disabled">暂无可用链接</p>') +
+      '<p class="doc-paper-hint">完整核验记录见 <code>public/docs/论文引用核验.md</code>。</p>' +
+      '</section>';
+  }
+
   function renderDoc(key) {
     const bundle = global.__DOCS__ || {};
     const entry = bundle[key];
@@ -518,6 +537,7 @@
       (approx ? '<span class="doc-badge">教学演示级近似</span>' : '') +
       '</div>' +
       parseMd(entry.body) +
+      paperSection(key) +
       '</article>';
   }
 

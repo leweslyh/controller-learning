@@ -6,13 +6,14 @@
    ============================================================ */
 
 const APP = {
-  name: '控制理论模拟器 V3.1 · 纸面控制实验室',
-  version: '3.1',
-  methods: 99,
-  categories: 11,
+  name: '控制理论模拟器 V4.0 · 纸面控制实验室',
+  version: '4.0',
+  methods: 159,
+  categories: 12,
   plants: 3,
   defaultPlant: 'freeMass',
-  renderEngine: 'KaTeX（本地 vendor）+ MathML 回退'
+  renderEngine: 'KaTeX（本地 vendor）+ MathML 回退',
+  papers: 159, paperVerified: 153
 };
 
 export const config = { path: '/api/health' };

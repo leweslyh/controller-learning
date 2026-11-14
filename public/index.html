@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="控制理论模拟器：多种控制算法、11 类理论体系、3 个经典被控对象与逐法初学者教学文档的离线交互实验台。">
-<title>纸面控制实验室</title>
+<meta name="description" content="控制理论模拟器：多种控制算法、12 类理论体系、3 个经典被控对象与逐法初学者教学文档的离线交互实验台。">
+<title>纸面控制实验室 · V4.0</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="stylesheet" href="styles.css">
@@ -46,9 +46,25 @@
   <symbol id="i-formula" viewBox="0 0 24 24"><path d="M4 5h9M8.5 5v14M4 19h9"/><path d="M15 8h5M17.5 8v8M15 16h5"/></symbol>
   <symbol id="i-panel-left" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></symbol>
   <symbol id="i-panel-right" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4"/><circle cx="9" cy="14" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.2" fill="currentColor" stroke="none"/><path d="M2 12v3M22 12v3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2z"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 21 6"/><path d="M8 6V4h8v2M6 6l1 15h10l1-15"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></symbol>
+  <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M4 21h16"/><path d="M6.5 14.5 13 8l5 5-6.5 6.5H6.5z"/><path d="M9 21l-4-4"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 12V6a1.5 1.5 0 0 1 3 0v5"/><path d="M11 11V5a1.5 1.5 0 0 1 3 0v6"/><path d="M14 11V6.5a1.5 1.5 0 0 1 3 0V15"/><path d="M17 12.5a1.5 1.5 0 0 1 3 0V16a5 5 0 0 1-5 5h-3a6 6 0 0 1-4.5-2L4 15"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+  <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="10" y1="18" x2="14" y2="18"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></symbol>
 </svg>
 
-<a class="skip-link" href="#stage">跳到实验舞台</a>
+<a class="skip-link" href="#stage">跳到实验主界面</a>
 
 <div class="app" id="app">
   <!-- ── 顶部工具栏 ───────────────────────────────── -->
@@ -60,25 +76,20 @@
       </span>
     </div>
 
-    <div class="topbar-actions" role="group" aria-label="实验控制">
-      <button type="button" id="btn-run" class="btn btn-primary" aria-label="启动或暂停仿真">
-        <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>启动</span>
+    <div class="topbar-actions" role="group" aria-label="全局工具">
+      <button type="button" id="btn-mobile-browser" class="btn btn-icon mobile-only" aria-label="控制器目录" title="控制器目录">
+        <svg class="icon" aria-hidden="true"><use href="#i-panel-left"/></svg>
       </button>
-      <button type="button" id="btn-step" class="btn btn-icon" aria-label="单步推进" title="单步推进（→）">
-        <svg class="icon" aria-hidden="true"><use href="#i-step"/></svg>
+      <button type="button" id="btn-mobile-inspector" class="btn btn-icon mobile-only" aria-label="实验参数" title="实验参数">
+        <svg class="icon" aria-hidden="true"><use href="#i-panel-right"/></svg>
       </button>
-      <button type="button" id="btn-disturb" class="btn btn-ghost" aria-label="施加脉冲扰动">
-        <svg class="icon" aria-hidden="true"><use href="#i-zap"/></svg><span>扰动</span>
-      </button>
-      <button type="button" id="btn-reset" class="btn btn-ghost" aria-label="重置仿真">
-        <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>重置</span>
+      <button type="button" id="assistant-launcher" class="btn btn-ghost assistant-entry"
+              aria-controls="assistant-panel" aria-expanded="false" title="智能助手（A）">
+        <svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg><span>智能助手</span>
       </button>
       <span class="topbar-sep" aria-hidden="true"></span>
       <button type="button" id="btn-docs" class="btn btn-ghost" aria-label="打开当前方法的教学文档" title="当前方法的教学文档（H）">
         <svg class="icon" aria-hidden="true"><use href="#i-formula"/></svg><span>教学文档</span>
-      </button>
-      <button type="button" id="btn-presets" class="btn btn-icon" aria-label="场景预设" title="场景预设">
-        <svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>
       </button>
       <button type="button" id="btn-glossary" class="btn btn-icon" aria-label="符号术语词典" title="符号术语词典">
         <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
@@ -94,6 +105,9 @@
       <button type="button" id="btn-export" class="btn btn-icon" aria-label="导出实验数据或图片" title="导出 CSV / PNG / 公式手册">
         <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
       </button>
+      <button type="button" id="btn-layout" class="btn btn-ghost layout-entry" aria-haspopup="menu" aria-expanded="false" title="布局：自动适配">
+        <svg class="icon" aria-hidden="true"><use id="layout-icon-use" href="#i-monitor"/></svg><span id="layout-label">自动</span>
+      </button>
       <button type="button" id="btn-theme" class="btn btn-icon" aria-label="切换深浅主题" title="切换深浅主题">
         <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
       </button>
@@ -101,6 +115,9 @@
         <svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>
       </button>
     </div>
+    <button type="button" id="btn-topbar-menu" class="btn btn-icon topbar-menu-btn" aria-label="展开菜单" aria-expanded="false" title="展开菜单">
+      <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+    </button>
   </header>
 
   <!-- ── 三栏工作区 ───────────────────────────────── -->
@@ -111,11 +128,9 @@
         <button type="button" id="btn-browser-expand" class="rail-btn" aria-label="展开控制器目录" title="展开控制器目录">
           <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
         </button>
-        <span class="rail-label" id="rail-methods-label">控制算法体系</span>
-        <span class="rail-current" id="rail-current">PID</span>
-        <button type="button" id="btn-rail-docs" class="rail-btn rail-btn-sm" aria-label="当前方法教学文档" title="当前方法教学文档">
-          <svg class="icon" aria-hidden="true"><use href="#i-formula"/></svg>
-        </button>
+        <!-- 挂起态只做导航：竖排 12 章（数字 + 该单元图标），悬停/聚焦弹出二级目录。
+             不放当前方法、教学文档等快捷入口，由 ui.js::renderRailNav() 动态生成。 -->
+        <nav class="rail-nav" id="rail-nav" aria-label="按理论体系快速导航"></nav>
       </div>
       <div class="panel-head">
         <div>
@@ -132,7 +147,7 @@
       </div>
       <div class="lab-stats" aria-label="实验台规模">
         <div class="lab-stat"><strong id="stat-methods">—</strong><span>控制算法</span></div>
-        <div class="lab-stat"><strong id="stat-categories">11</strong><span>理论体系</span></div>
+        <div class="lab-stat"><strong id="stat-categories">—</strong><span>理论体系</span></div>
         <div class="lab-stat"><strong id="stat-plants">3</strong><span>被控对象</span></div>
       </div>
       <div class="browser-tabs" role="tablist" aria-label="控制器集合">
@@ -143,31 +158,47 @@
       <div class="browser-body scroll-y" id="browser-list" role="listbox" aria-label="控制器列表"></div>
       <div class="browser-foot">
         <span class="dot dot-teal"></span> 当前：<strong id="current-method-name">PID 控制</strong>
-        <span class="tag" title="零外部依赖、零网络请求，双击即可运行">离线可用</span>
+        <span class="tag" title="仿真、曲线与教学文档全部离线；智能助手可选用同源后端联网">离线可用</span>
       </div>
     </aside>
 
-    <!-- 中：实验舞台 -->
-    <main class="stage" id="stage" aria-label="实验舞台">
-      <section class="panel sim-panel" aria-labelledby="sim-title">
-        <div class="panel-head sim-head">
-          <div class="head-title">
-            <svg class="icon" aria-hidden="true"><use href="#i-target"/></svg>
-            <h2 class="panel-title" id="sim-title">被控对象动力学</h2>
-          </div>
-          <div class="sim-plant">
-            <select id="plant-select" class="select-input" aria-label="选择被控对象"></select>
-          </div>
-          <div class="sim-actions">
-            <button type="button" id="btn-plant-model" class="chip-btn" title="动力学方程、符号、参数与物理说明（M）">
-              <svg class="icon" aria-hidden="true"><use href="#i-formula"/></svg> 方程与符号
+    <!-- 中：实验主卡片（包裹动力学、状态观测与 8 张指标小卡） -->
+    <main class="stage" id="stage" aria-label="实验主界面">
+      <header class="stage-head">
+        <div class="stage-plant">
+          <label class="stage-plant-label" for="plant-select">被控对象</label>
+          <select id="plant-select" class="select-input" aria-label="选择被控对象"></select>
+        </div>
+        <div class="stage-actions">
+          <div class="stage-controls" role="group" aria-label="实验控制">
+            <button type="button" id="btn-run" class="btn btn-primary stage-primary" aria-label="启动或暂停仿真">
+              <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>启动</span>
             </button>
-            <button type="button" id="btn-sim-guide" class="chip-btn" title="实验指南：本方法教学文档">
-              <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg> 实验指南
+            <button type="button" id="btn-step" class="btn btn-icon" aria-label="单步推进" title="单步推进（→）">
+              <svg class="icon" aria-hidden="true"><use href="#i-step"/></svg>
+            </button>
+            <button type="button" id="btn-disturb" class="btn btn-ghost stage-primary" aria-label="施加脉冲扰动">
+              <svg class="icon" aria-hidden="true"><use href="#i-zap"/></svg><span>扰动</span>
+            </button>
+            <button type="button" id="btn-reset" class="btn btn-ghost stage-primary" aria-label="重置仿真">
+              <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>重置</span>
+            </button>
+            <span class="stage-sep" aria-hidden="true"></span>
+            <button type="button" id="btn-presets" class="btn stage-extra" aria-label="场景预设" title="场景预设：一键加载实验条件">
+              <svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span>场景预设</span>
+            </button>
+            <button type="button" id="btn-plant-model" class="btn stage-extra" aria-label="方程与符号" title="动力学方程、符号、参数与物理说明（M）">
+              <svg class="icon" aria-hidden="true"><use href="#i-formula"/></svg><span>方程与符号</span>
+            </button>
+            <button type="button" id="btn-sim-guide" class="btn stage-extra" aria-label="实验指南" title="实验指南：本方法教学文档">
+              <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>实验指南</span>
             </button>
           </div>
         </div>
+      </header>
 
+      <div class="stage-body">
+      <section class="panel sim-panel" aria-label="被控对象动画">
         <div class="sim-canvas-wrap">
           <canvas id="canvas-sim" role="img" aria-label="被控对象专属动画"></canvas>
           <div class="sim-badge"><span class="dot" id="run-dot"></span><span id="sim-state-text">待机</span></div>
@@ -239,6 +270,7 @@
         <div class="legend" id="legend" aria-label="曲线图例"></div>
         <div class="track-strip" id="track-strip" aria-label="实验轨迹"></div>
       </section>
+      </div>
     </main>
 
     <!-- 右：档案与参数（参考实验室的参数小卡） -->
@@ -249,18 +281,24 @@
         </button>
         <span class="rail-label">实验参数 · 档案</span>
       </div>
-      <div class="inspector-head">
-        <div class="head-title">
-          <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
-          <h2 class="panel-title">控制器档案</h2>
-        </div>
-        <div class="panel-head-actions">
-          <button type="button" id="btn-inspector-collapse" class="chip-btn" aria-label="收起参数栏" title="收起并挂到边框">
-            <svg class="icon" aria-hidden="true"><use href="#i-panel-right"/></svg>
-          </button>
-        </div>
-      </div>
-      <div id="controller-profile"></div>
+      <!-- 控制器档案：默认折叠（不含 open），标题栏常驻可点；
+           折叠按钮 .fold-box 必须是 summary 的直接子元素，才能复用统一的旋转/反白样式。
+           折叠状态不写入任何 storage，切换方法后回到默认折叠。 -->
+      <details class="inspector-profile" id="profile-details">
+        <summary class="inspector-head" id="profile-summary">
+          <span class="fold-box" aria-hidden="true"><svg class="icon"><use href="#i-chevron"/></svg></span>
+          <div class="head-title">
+            <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
+            <h2 class="panel-title">控制器档案</h2>
+          </div>
+          <div class="panel-head-actions">
+            <button type="button" id="btn-inspector-collapse" class="chip-btn" aria-label="收起参数栏" title="收起并挂到边框">
+              <svg class="icon" aria-hidden="true"><use href="#i-panel-right"/></svg>
+            </button>
+          </div>
+        </summary>
+        <div id="controller-profile"></div>
+      </details>
       <div class="inspector-head">
         <div class="head-title">
           <svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg>
@@ -274,27 +312,38 @@
     </aside>
   </div>
 
+  <!-- 挂起态章节二级目录：position:fixed 脱离 flex 流，不受 .browser 的
+       overflow:hidden 与「挂起时隐藏非 rail 子元素」规则影响。 -->
+  <div class="rail-popover" id="rail-popover" role="dialog" aria-label="章节二级目录" hidden></div>
+
   <!-- ── 底部开发信息栏 ───────────────────────────── -->
   <footer class="statusbar statusbar-dev" aria-label="开发信息">
     <span class="status-item">开发者 <strong>Leweslyh</strong></span>
     <span class="status-sep" aria-hidden="true"></span>
     <span class="status-item">邮箱 <a class="dev-mail" href="mailto:759528706@qq.com">759528706@qq.com</a></span>
     <span class="status-sep" aria-hidden="true"></span>
-    <span class="status-item">版本 V3.1 · 教学演示版</span>
-    <span class="status-grow"></span>
-    <span class="status-item">纯前端离线运行 · 零外部依赖</span>
+    <span class="status-item">版本 V4.0 · 教学演示版</span>
   </footer>
 </div>
 
 <!-- ── 浮层 ───────────────────────────────────────── -->
 <div class="overlay" id="overlay-glossary" hidden>
   <div class="overlay-mask" data-close="overlay-glossary"></div>
-  <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="glossary-title">
-    <header class="drawer-head">
-      <div><h2 id="glossary-title">符号术语词典</h2><p>控制理论常见符号、物理含义与工程直觉</p></div>
-      <button type="button" class="btn btn-icon" data-close="overlay-glossary" aria-label="关闭词典"><svg class="icon"><use href="#i-close"/></svg></button>
+  <!-- 词典弹窗：复用教学文档阅读器的居中外壳（同款圆角、墨线、硬投影与 well 头部） -->
+  <section class="docs-shell glossary-shell" role="dialog" aria-modal="true" aria-labelledby="glossary-title">
+    <header class="docs-head">
+      <div class="docs-brand">
+        <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
+        <div>
+          <strong id="glossary-title">符号术语词典</strong>
+          <small>控制理论常见符号、物理含义与工程直觉</small>
+        </div>
+      </div>
+      <div class="docs-actions">
+        <button type="button" class="btn btn-icon" data-close="overlay-glossary" aria-label="关闭词典"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
     </header>
-    <div class="drawer-body scroll-y" id="glossary-body"></div>
+    <div class="glossary-body scroll-y" id="glossary-body"></div>
   </section>
 </div>
 
@@ -342,7 +391,7 @@
   <section class="modal guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title">
     <div class="guide-hero"><svg class="icon"><use href="#i-spark"/></svg></div>
     <h2 id="guide-title">欢迎来到纸面控制实验室</h2>
-    <p>左侧控制算法按 11 类理论体系分章陈列，选定后挑一个被控对象，调节右侧增益，观察中央刚体响应与三张带完整坐标轴的曲线。首次进入会展开目录，之后自动挂到左边框；按 F 进入专注模式。</p>
+    <p>左侧控制算法按 12 类理论体系分章陈列，选定后挑一个被控对象，调节右侧增益，观察中央刚体响应与三张带完整坐标轴的曲线。首次进入会展开目录，之后自动挂到左边框；按 F 进入专注模式。</p>
     <div class="guide-steps">
       <div><span>01</span> 选控制器与对象</div>
       <div><span>02</span> 读教学文档 / 调参</div>
@@ -352,6 +401,109 @@
       <label class="checkline"><input type="checkbox" id="guide-no-more"> 不再显示</label>
       <button type="button" id="btn-guide-start" class="btn btn-primary">开始实验</button>
     </div>
+  </section>
+</div>
+
+<!-- 控制助教设置：独立弹窗（密钥只保存在本机浏览器） -->
+<div class="overlay" id="overlay-assistant-settings" hidden>
+  <div class="overlay-mask"></div>
+  <section class="modal assistant-config" role="dialog" aria-modal="true" aria-labelledby="assistant-config-title">
+    <header class="drawer-head">
+      <div>
+        <h2 id="assistant-config-title">控制助教设置</h2>
+        <p>连接 DeepSeek，选择模型与回答长度，管理长期记忆</p>
+      </div>
+      <button type="button" class="btn btn-icon" id="assistant-settings-close" aria-label="关闭设置" title="关闭设置">
+        <svg class="icon"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div class="modal-body assistant-config-body scroll-y">
+      <section class="assistant-config-section">
+        <header class="assistant-config-head">
+          <span class="assistant-config-no">01</span>
+          <div>
+            <strong>连接与模型</strong>
+            <small>自动模式优先直连，失败时回退到本地检索</small>
+          </div>
+        </header>
+        <div class="assistant-field-row">
+          <label class="assistant-field">
+            <span>连接方式</span>
+            <select id="assistant-mode" aria-label="连接方式">
+              <option value="auto">自动（推荐）</option>
+              <option value="direct">浏览器直连</option>
+              <option value="proxy">同源代理</option>
+            </select>
+          </label>
+          <label class="assistant-field">
+            <span>模型</span>
+            <select id="assistant-model" aria-label="DeepSeek 模型">
+              <option value="deepseek-flash">deepseek-flash · 快 / 省</option>
+              <option value="deepseek-v4-pro">deepseek-v4-pro · 更强</option>
+              <option value="__custom__">自定义模型名…</option>
+            </select>
+          </label>
+        </div>
+        <label class="assistant-field" id="assistant-model-custom-wrap" hidden>
+          <span>自定义模型名</span>
+          <input type="text" id="assistant-model-custom" spellcheck="false" placeholder="例如 deepseek-flash">
+        </label>
+        <div class="assistant-field-row">
+          <label class="assistant-field">
+            <span>思考长度</span>
+            <select id="assistant-thinking" aria-label="思考长度">
+              <option value="off">关闭思考 · 最快</option>
+              <option value="high">标准 · high</option>
+              <option value="max">深入 · max</option>
+            </select>
+          </label>
+          <label class="assistant-field">
+            <span>回答长度</span>
+            <select id="assistant-max-tokens" aria-label="回答长度">
+              <option value="800">简短 · 800</option>
+              <option value="1600">标准 · 1600</option>
+              <option value="3200">详细 · 3200</option>
+              <option value="6000">深入 · 6000</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="assistant-config-section">
+        <header class="assistant-config-head">
+          <span class="assistant-config-no">02</span>
+          <div>
+            <strong>DeepSeek API Key</strong>
+            <small>由你输入，只保存在本机浏览器</small>
+          </div>
+        </header>
+        <div class="assistant-key-row">
+          <input type="password" id="assistant-api-key" autocomplete="off" spellcheck="false" placeholder="sk-…" aria-label="DeepSeek API Key">
+          <button type="button" id="assistant-key-toggle" class="assistant-mini-btn">显示</button>
+          <button type="button" id="assistant-key-clear" class="assistant-mini-btn">清除</button>
+        </div>
+        <small class="assistant-key-state" id="assistant-key-state">未设置</small>
+      </section>
+
+      <section class="assistant-config-section">
+        <header class="assistant-config-head">
+          <span class="assistant-config-no">03</span>
+          <div>
+            <strong>长期记忆</strong>
+            <small>助手每轮都会带上这份设定</small>
+          </div>
+        </header>
+        <label class="assistant-field">
+          <span>实验室设定与个人偏好</span>
+          <textarea id="assistant-facts" rows="5" placeholder="写下你希望助手长期遵守的偏好"></textarea>
+        </label>
+      </section>
+    </div>
+    <footer class="assistant-config-foot">
+      <button type="button" id="assistant-settings-save" class="btn btn-primary">保存设置</button>
+      <button type="button" id="assistant-memory-reset" class="btn btn-ghost">恢复默认记忆</button>
+      <button type="button" id="assistant-forget" class="btn btn-ghost">清空全部记忆</button>
+    </footer>
   </section>
 </div>
 
@@ -385,12 +537,145 @@
   </section>
 </div>
 
+<!-- ── 智能助手：可拖动非模态浮窗（入口已在顶部菜单栏） ─────────── -->
+<section class="assistant-panel" id="assistant-panel" role="dialog" aria-modal="false"
+         aria-labelledby="assistant-title" hidden>
+  <span class="assistant-resizer" data-resize="n" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="s" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="e" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="w" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="ne" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="nw" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="se" aria-hidden="true"></span>
+  <span class="assistant-resizer" data-resize="sw" aria-hidden="true"></span>
+  <header class="assistant-head" id="assistant-head">
+    <button type="button" class="assistant-grip" id="assistant-grip"
+            aria-label="拖动助手窗口，也可用方向键微调" title="拖动窗口">
+      <svg class="icon" aria-hidden="true"><use href="#i-grip"/></svg>
+    </button>
+    <span class="assistant-avatar" aria-hidden="true"><svg class="icon"><use href="#i-bot"/></svg></span>
+    <div class="assistant-id">
+      <strong id="assistant-title">控制助教</strong>
+      <small>DeepSeek · V4.0 知识库</small>
+    </div>
+    <span class="assistant-status is-idle" id="assistant-status" role="status">
+      <span class="assistant-dot"></span><span id="assistant-status-text">未连接</span>
+    </span>
+    <div class="assistant-tools">
+      <button type="button" id="assistant-settings-btn" class="assistant-tool" aria-label="助手设置与记忆" title="设置与记忆">
+        <svg class="icon"><use href="#i-settings"/></svg>
+      </button>
+      <button type="button" id="assistant-minimize" class="assistant-tool" aria-label="收起助手" title="收起">
+        <svg class="icon"><use href="#i-minus"/></svg>
+      </button>
+      <button type="button" id="assistant-close" class="assistant-tool" aria-label="关闭助手" title="关闭">
+        <svg class="icon"><use href="#i-close"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="assistant-body scroll-y" id="assistant-messages" aria-live="polite" aria-label="助手对话"></div>
+
+  <div class="assistant-quick" id="assistant-quick" aria-label="快捷提问">
+    <button type="button" data-ask="当前方法 {method} 的关键公式是什么？">关键公式</button>
+    <button type="button" data-ask="{method} 的参数怎么调？">参数怎么调</button>
+    <button type="button" data-ask="PID 与 SMC 有什么区别？">方法对比</button>
+    <button type="button" data-ask="{method} 常见误区有哪些？">常见误区</button>
+  </div>
+
+  <div class="assistant-composer">
+    <textarea id="assistant-input" rows="2" placeholder="输入你的问题…（Enter 发送 / Shift+Enter 换行）" aria-label="向助手提问"></textarea>
+    <button type="button" id="assistant-send" class="assistant-send" aria-label="发送问题" title="发送">
+      <svg class="icon" aria-hidden="true"><use href="#i-send"/></svg><span>发送</span>
+    </button>
+    <button type="button" id="assistant-stop" class="assistant-send assistant-stop"
+            aria-label="终止本次回答" title="终止本次回答" hidden>
+      <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg><span>终止</span>
+    </button>
+  </div>
+
+  <footer class="assistant-foot">
+    <button type="button" id="assistant-clear" aria-label="清空对话" title="清空当前对话">
+      <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg> 清空对话
+    </button>
+  </footer>
+</section>
+
+<!-- ── 手写板：整屏透明画布 + 可拖浮工具条（批注不改变页面内容） ── -->
+<button type="button" class="pad-toggle" id="pad-toggle" aria-label="打开手写板" aria-expanded="false" title="手写板（批注）">
+  <svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg>
+</button>
+<canvas class="pad-canvas" id="pad-canvas" aria-hidden="true"></canvas>
+<div class="pad-panel" id="pad-panel" role="toolbar" aria-label="手写板工具" hidden>
+  <div class="pad-head" id="pad-head">
+    <span class="pad-title"><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg>手写板</span>
+    <div class="pad-tools">
+      <button type="button" class="pad-tool is-active" id="pad-pen" data-tool="pen" aria-pressed="true" title="铅笔" aria-label="铅笔">
+        <svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg>
+      </button>
+      <button type="button" class="pad-tool" id="pad-eraser" data-tool="eraser" aria-pressed="false" title="橡皮" aria-label="橡皮">
+        <svg class="icon" aria-hidden="true"><use href="#i-eraser"/></svg>
+      </button>
+      <button type="button" class="pad-tool" id="pad-browse" data-tool="browse" aria-pressed="false" title="浏览页面（不绘制）" aria-label="浏览页面">
+        <svg class="icon" aria-hidden="true"><use href="#i-hand"/></svg>
+      </button>
+      <span class="pad-sep" aria-hidden="true"></span>
+      <button type="button" class="pad-tool" id="pad-undo" title="撤销" aria-label="撤销">
+        <svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg>
+      </button>
+      <button type="button" class="pad-tool" id="pad-redo" title="重做" aria-label="重做">
+        <svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg>
+      </button>
+      <button type="button" class="pad-tool" id="pad-clear" title="清空" aria-label="清空笔迹">
+        <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg>
+      </button>
+      <button type="button" class="pad-tool pad-close" id="pad-close" title="关闭手写板" aria-label="关闭手写板">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="pad-colors" id="pad-colors" role="group" aria-label="画笔颜色">
+    <button type="button" class="pad-color is-active" data-color="#151715" style="--c:#151715" title="墨黑" aria-label="墨黑" aria-pressed="true"></button>
+    <button type="button" class="pad-color" data-color="#d6453d" style="--c:#d6453d" title="朱红" aria-label="朱红" aria-pressed="false"></button>
+    <button type="button" class="pad-color" data-color="#2f6fb3" style="--c:#2f6fb3" title="靛蓝" aria-label="靛蓝" aria-pressed="false"></button>
+    <button type="button" class="pad-color" data-color="#2f8f55" style="--c:#2f8f55" title="草绿" aria-label="草绿" aria-pressed="false"></button>
+    <button type="button" class="pad-color" data-color="#d2742c" style="--c:#d2742c" title="橙" aria-label="橙" aria-pressed="false"></button>
+    <button type="button" class="pad-color" data-color="#8057a8" style="--c:#8057a8" title="紫" aria-label="紫" aria-pressed="false"></button>
+    <button type="button" class="pad-color" data-color="#b08d57" style="--c:#b08d57" title="赭石" aria-label="赭石" aria-pressed="false"></button>
+    <button type="button" class="pad-color" data-color="#e0b400" style="--c:#e0b400" title="金黄" aria-label="金黄" aria-pressed="false"></button>
+  </div>
+</div>
+
+<!-- 布局切换菜单（自动 / 电脑 / 平板 / 手机） -->
+<div class="layout-menu" id="layout-menu" role="menu" aria-label="布局切换" hidden>
+  <button type="button" role="menuitemradio" data-layout="auto" aria-checked="true">
+    <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
+    <span>自动适配</span><em id="layout-detected">电脑端</em>
+  </button>
+  <button type="button" role="menuitemradio" data-layout="desktop" aria-checked="false">
+    <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
+    <span>电脑端</span>
+  </button>
+  <button type="button" role="menuitemradio" data-layout="tablet" aria-checked="false">
+    <svg class="icon" aria-hidden="true"><use href="#i-tablet"/></svg>
+    <span>平板端</span>
+  </button>
+  <button type="button" role="menuitemradio" data-layout="mobile" aria-checked="false">
+    <svg class="icon" aria-hidden="true"><use href="#i-phone"/></svg>
+    <span>手机端</span>
+  </button>
+</div>
+
+<div class="mobile-scrim" id="mobile-scrim" hidden></div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <noscript><p class="noscript">本实验台需要启用 JavaScript 才能运行仿真；请开启后重新打开本文件。</p></noscript>
 
 <script src="vendor/katex/katex.min.js"></script>
 <script src="js/data.js"></script>
+<!-- 159 法的原论文出处（离线数据，运行时零网络请求） -->
+<script src="js/papers.js"></script>
 <script src="js/math.js"></script>
 <!-- 教学文档单一来源（由 tools/build-docs.js 从 public/docs/methods/*.md 打包，离线 file:// 可读） -->
 <script src="js/docs-content.js"></script>
@@ -401,5 +686,11 @@
 <script src="js/docs.js"></script>
 <script src="js/rails.js"></script>
 <script src="js/app.js"></script>
+<!-- 智能助手：本地 RAG 检索 + 记忆 + 同源 DeepSeek 代理（无后端时降级为离线摘录） -->
+<script src="js/assistant.js"></script>
+<!-- 手写板：整屏批注画布（笔 / 橡皮 / 颜色 / 撤销 / 重做 / 清空） -->
+<script src="js/pad.js"></script>
+<!-- 设备布局：自动识别 + 电脑 / 平板 / 手机强制切换 -->
+<script src="js/layout.js"></script>
 </body>
 </html>

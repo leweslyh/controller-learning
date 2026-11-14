@@ -1,7 +1,7 @@
 /* ============================================================
    app.js — 编排层（唯一持有可写状态入口）
    初始化、订阅、固定步长主循环、快捷键、持久化、分享与导出。
-   V3.1：被控对象切换、TeX/Markdown 公式复制、分享链接含对象参数。
+   V4.0：159 法 / 12 类、原论文出处、被控对象切换、分享链接含对象参数。
    ============================================================ */
 (function (global) {
   'use strict';
@@ -11,8 +11,9 @@
   const charts = NS.charts;
   const ui = NS.ui;
   const doc = global.document;
-  const STORAGE_KEY = 'ctrlsim.v3.prefs';
-  const VERSION = '3.1';
+  const STORAGE_KEY = 'ctrlsim.v4.prefs';
+  const LEGACY_STORAGE_KEY = 'ctrlsim.v3.prefs';
+  const VERSION = '4.0';
 
   let prefs = loadPrefs();
   let rafId = null;
@@ -23,7 +24,9 @@
   function loadPrefs() {
     const base = { favorites: [], recent: [], theme: 'light', guideDismissed: false };
     try {
-      const raw = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
+      let raw = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
+      /* V4 换了存储键；首次升级时沿用 V3 的收藏/主题，避免用户偏好丢失 */
+      if (!raw && global.localStorage) raw = global.localStorage.getItem(LEGACY_STORAGE_KEY);
       if (!raw) return base;
       const parsed = JSON.parse(raw);
       return {
@@ -183,6 +186,24 @@
     ui.toast(ok ? '正在生成图表 PNG…' : 'PNG 导出失败');
   }
 
+  /* 导出 159 法的论文出处清单（含核验状态），CSV 字段统一加双引号转义 */
+  function exportPapers() {
+    const P = NS.papers;
+    if (!P || !P.getPaper) { ui.toast('论文数据未加载'); return; }
+    const cell = (v) => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
+    const head = ['方法键', '方法名称', '分类', '作者', '题名', '出处', '链接', '核验状态', '核验说明'];
+    const rows = D.methodList.map((key) => {
+      const conf = D.CONTROLLER_CONFIGS[key] || {};
+      const p = P.getPaper(key) || {};
+      const v = (P.getVerify && P.getVerify(key)) || {};
+      return [key, conf.name || '', conf.category || '', p.authors || '', p.title || '',
+        p.journal || '', p.url || '', v.status || 'unverified', v.reason || ''].map(cell).join(',');
+    });
+    const csv = '\ufeff' + head.map(cell).join(',') + '\r\n' + rows.join('\r\n') + '\r\n';
+    const ok = charts.download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'ctrl-sim-papers.csv');
+    ui.toast(ok ? '已导出 159 法论文出处 CSV' : '论文出处导出失败');
+  }
+
   function buildHash() {
     const s = sim.getSettings();
     const env = {};
@@ -280,6 +301,9 @@
         el.tagName === 'SELECT' || el.isContentEditable);
       if (ev.key === 'Escape') return;
       if (typing) return;
+      /* 焦点在原生交互元素上时，空格交给元素自身（尤其 <summary> 的展开/收起），
+         否则会被「启动/暂停」快捷键 preventDefault 掉，键盘用户无法操作折叠块。 */
+      if (ev.key === ' ' && el && (el.tagName === 'SUMMARY' || el.tagName === 'BUTTON' || el.tagName === 'A')) return;
       switch (ev.key) {
         case ' ': ev.preventDefault(); toggleRun(); break;
         case 'ArrowRight': ev.preventDefault(); step(); break;
@@ -330,7 +354,7 @@
       ui.init({
         selectMethod, changeParam, toggleRun, step, disturb, reset, rerecord,
         resetParams, setSpeed, toggleCompare, applyPreset, toggleFavorite,
-        toggleTheme, dismissGuide, exportCSV, exportPNG, exportFormulaBook, share,
+        toggleTheme, dismissGuide, exportCSV, exportPNG, exportFormulaBook, exportPapers, share,
         selectPlant
       });
       ui.setTheme(prefs.theme);
@@ -344,12 +368,12 @@
       if (!prefs.guideDismissed) ui.openOverlay('overlay-guide');
       rafId = global.requestAnimationFrame(loop);
     } catch (err) {
-      console.error('控制理论模拟器初始化失败：请确认 index.html 与 js/ 目录下的六个脚本完整。', err);
+      console.error('控制理论模拟器初始化失败：请确认 index.html 与 js/ 目录下的脚本完整。', err);
     }
   }
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 
-  NS.app = { init, refreshAll, share, buildHash, restoreFromHash };
+  NS.app = { init, refreshAll, share, buildHash, restoreFromHash, exportPapers };
 })(window);

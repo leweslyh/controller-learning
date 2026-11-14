@@ -11,3 +11,12 @@ Thumbs.db
 
 # 浏览器验收截图（verify-file-protocol.js 的运行产物，非源码）
 screenshots/
+
+# 浏览器验收缓存（可重算产物，不入库）
+.playwright-cli/
+
+# V4.0 移植中间产物（可由 tools/port-v4-*.js 重算；联网核验结果保留作可追溯依据）
+tools/_port/
+
+# 开发期脚本与工具：按需求不入库（站点运行不依赖 tools/）
+tools/

@@ -1,6 +1,6 @@
 /* ============================================================
    ui.js — 界面层（DOM 构建与局部更新；状态写回全部交给 app.js）
-   V3.1：TeX 公式渲染、被控对象选择、能耗口径说明、坐标轴指标外置。
+   V4.0：TeX 公式渲染、被控对象选择、能耗口径说明、坐标轴指标外置。
    ============================================================ */
 (function (global) {
   'use strict';
@@ -185,7 +185,7 @@
       '</section>' +
 
       '<section class="model-block">' +
-        '<h3><span>03</span> 等效二阶形式（99 条控制律的接入点）</h3>' +
+        '<h3><span>03</span> 等效二阶形式（159 条控制律的接入点）</h3>' +
         '<div class="model-eff">' +
           '<div class="model-eff-eq">' + NS.math.render('m\\ddot{x}+c\\dot{x}+kx=u') + '</div>' +
           '<div class="model-eff-grid">' +
@@ -236,7 +236,7 @@
         if (!items.length) return;
         total += items.length;
         const openByDefault = !!q || (scope !== 'all') || starFilter || items.some((m) => m.key === activeMethod);
-        html += '<details class="method-group"' + (openByDefault ? ' open' : '') + '>' +
+        html += '<details class="method-group" data-cat-index="' + catIndex + '"' + (openByDefault ? ' open' : '') + '>' +
           '<summary><span class="chapter-no">' + (CN_NUM[catIndex] || String(catIndex + 1)) + '</span>' +
           '<span class="chapter-name">' + esc(cat.replace(/^\d+\.\s*/, '')) + '</span>' +
           '<span class="group-count">' + items.length + '</span>' +
@@ -246,6 +246,7 @@
       if (!total) html = '<p class="method-empty">没有匹配的控制器，试试其他关键词</p>';
     }
     host.innerHTML = html;
+    renderRailNav();
   }
 
   function methodButton(key, isFav) {
@@ -258,8 +259,132 @@
       (isFav ? '取消收藏' : '收藏') + ' ' + esc(conf.name) + '">' + icon('star') + '</span></button>';
   }
 
+  /* ── 挂起态章节导航（参考「粒子先生的物理实验室」） ──────
+     窄条竖排 12 章中文数字；悬停或键盘聚焦弹出该章二级目录，
+     二级项可直接切换控制器，点击章节号则展开左栏并定位该章。
+     分类与方法数全部取自数据层，不写死 12 或 159。 */
+  let railHideTimer = 0;
+  let railOpenIndex = -1;
+
+  /* 12 类理论体系各配一个语义图标（顺序与 data.js 的 CATEGORIES 一致）。
+     分类数若变化，按下标取模兜底，不写死 12。 */
+  const RAIL_ICONS = [
+    'sliders',  // 01 PID 与工业变体：增益调节
+    'chart',    // 02 频域与补偿：Bode / 频响曲线
+    'target',   // 03 状态空间与最优：最优点
+    'filter',   // 04 鲁棒与 H∞：抑制不确定
+    'clock',    // 05 预测与滚动优化：滚动时域
+    'zap',      // 06 滑模变结构：切换 / 快速
+    'layers',   // 07 自抗扰与观测：扩张状态分层
+    'refresh',  // 08 非线性几何与能量：坐标变换
+    'settings', // 09 自适应与辨识：参数自整定
+    'spark',    // 10 数据驱动与智能：学习 / 智能
+    'check',    // 11 有限时间与安全约束：保证安全
+    'compare'   // 12 时滞与网络化：跨周期对比
+  ];
+  function railIcon(idx) {
+    return RAIL_ICONS[idx % RAIL_ICONS.length] || 'layers';
+  }
+
+  function railChapterLabel(cat, idx) {
+    return '第 ' + (CN_NUM[idx] || String(idx + 1)) + ' 章 ' + cat.replace(/^\d+\.\s*/, '');
+  }
+
+  function renderRailNav() {
+    const nav = $('rail-nav');
+    if (!nav) return;
+    nav.innerHTML = D.sortedCategories.map((cat, i) => {
+      const items = D.groupedMethods[cat] || [];
+      const active = items.some((m) => m.key === activeMethod);
+      const label = railChapterLabel(cat, i) + '，共 ' + items.length + ' 种方法';
+      return '<button type="button" class="rail-chapter' + (active ? ' is-active' : '') +
+        '" data-cat-index="' + i + '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+        '<span class="rail-chapter-no">' + esc(CN_NUM[i] || String(i + 1)) + '</span>' +
+        '<span class="rail-chapter-icon" aria-hidden="true">' + icon(railIcon(i)) + '</span>' +
+        '</button>';
+    }).join('');
+  }
+
+  function updateRailActive() {
+    const nav = $('rail-nav');
+    if (!nav) return;
+    nav.querySelectorAll('.rail-chapter').forEach((b) => {
+      const cat = D.sortedCategories[Number(b.dataset.catIndex)];
+      const items = (cat && D.groupedMethods[cat]) || [];
+      b.classList.toggle('is-active', items.some((m) => m.key === activeMethod));
+    });
+  }
+
+  function railPopoverHtml(idx) {
+    const cat = D.sortedCategories[idx];
+    if (!cat) return '';
+    const items = D.groupedMethods[cat] || [];
+    const ic = icon(railIcon(idx));
+    return '<div class="rail-pop-head">' +
+        '<span class="rail-pop-no">' + esc(CN_NUM[idx] || String(idx + 1)) + '</span>' +
+        '<span class="rail-pop-name">' + esc(cat.replace(/^\d+\.\s*/, '')) + '</span>' +
+        '<span class="rail-pop-count">' + items.length + ' 法</span></div>' +
+      '<div class="rail-pop-list">' + items.map((m, n) =>
+        '<button type="button" class="rail-pop-item' + (m.key === activeMethod ? ' is-active' : '') +
+        '" data-method="' + esc(m.key) + '" title="' + esc(m.name) + '">' +
+        '<span class="rail-pop-idx">' + (n + 1) + '</span>' +
+        '<span class="rail-pop-icon" aria-hidden="true">' + ic + '</span>' +
+        '<span class="rail-pop-item-name">' + esc(m.name) + '</span></button>').join('') +
+      '</div>' +
+      '<div class="rail-pop-foot">点方法直接切换 · 点章节号展开目录 · Esc 关闭</div>';
+  }
+
+  function showRailPopover(idx, anchor) {
+    const pop = $('rail-popover');
+    if (!pop || !anchor || idx < 0) return;
+    global.clearTimeout(railHideTimer);
+    railOpenIndex = idx;
+    pop.innerHTML = railPopoverHtml(idx);
+    pop.hidden = false;
+    /* 先显示再按真实尺寸定位，避免下方空间不足时溢出视口 */
+    const r = anchor.getBoundingClientRect();
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    const left = Math.min(r.right + 10, global.innerWidth - w - 8);
+    const top = Math.min(r.top - 8, global.innerHeight - h - 8);
+    pop.style.left = Math.max(8, left) + 'px';
+    pop.style.top = Math.max(8, top) + 'px';
+    const nav = $('rail-nav');
+    if (nav) nav.querySelectorAll('.rail-chapter').forEach((b) => {
+      b.classList.toggle('is-pop', Number(b.dataset.catIndex) === idx);
+    });
+  }
+
+  function hideRailPopover(delay) {
+    const pop = $('rail-popover');
+    if (!pop) return;
+    global.clearTimeout(railHideTimer);
+    const close = () => {
+      pop.hidden = true;
+      railOpenIndex = -1;
+      const nav = $('rail-nav');
+      if (nav) nav.querySelectorAll('.rail-chapter.is-pop').forEach((b) => b.classList.remove('is-pop'));
+    };
+    if (delay) railHideTimer = global.setTimeout(close, delay);
+    else close();
+  }
+
+  function jumpToChapter(idx) {
+    hideRailPopover(0);
+    const ws = $('workspace');
+    if (ws && ws.classList.contains('is-browser-collapsed') && NS.rails && NS.rails.toggleLeft) {
+      NS.rails.toggleLeft();
+    }
+    const list = $('browser-list');
+    const group = list && list.querySelector('.method-group[data-cat-index="' + idx + '"]');
+    if (group) {
+      group.open = true;
+      group.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
   function setActiveMethod(key) {
     activeMethod = key;
+    updateRailActive();
     const host = $('browser-list');
     if (host) {
       const prev = host.querySelector('.method-item.is-active');
@@ -281,8 +406,48 @@
     renderLegend();
   }
 
+  /* ── 原论文卡片 ─────────────────────────────────────
+     数据来自 js/papers.js（CtrlSim.papers），离线只渲染元数据与链接，
+     不发起任何网络请求。核验状态由开发期 tools/port-v4-verify-citations.js 写入。 */
+  const PAPER_STATUS = {
+    verified: { label: '已核验', cls: 'is-verified' },
+    suspect: { label: '存疑', cls: 'is-suspect' },
+    unreachable: { label: '链接不可达', cls: 'is-unreachable' },
+    unverified: { label: '待核验', cls: 'is-unverified' }
+  };
+  function paperBlock(key) {
+    const P = NS.papers;
+    if (!P || typeof P.getPaper !== 'function') return '';
+    const p = P.getPaper(key);
+    if (!p || !p.title) return '';
+    const v = (P.getVerify && P.getVerify(key)) || { status: 'unverified' };
+    const st = PAPER_STATUS[v.status] || PAPER_STATUS.unverified;
+    const url = /^https?:\/\//i.test(p.url || '') ? p.url : '';
+    const link = url
+      ? '<a class="paper-link" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" ' +
+        'title="在新标签打开原文链接（离线环境下不会自动请求）">' + icon('external') + '查看原文</a>'
+      : '<span class="paper-link is-disabled">暂无可用链接</span>';
+    /* 默认折叠：收起态仍可读「原论文 · SOURCE」标签与核验状态徽章；
+       展开后才铺开题名 / 作者 / 出处 / 核验说明 / 原文链接。
+       .fold-box 必须是 summary 的直接子元素，以复用统一的旋转/反白样式。 */
+    return '<details class="paper-card" aria-label="本方法的原论文出处">' +
+      '<summary class="paper-head">' +
+        '<span class="fold-box">' + icon('chevron') + '</span>' +
+        '<span class="paper-tag">原论文 · SOURCE</span>' +
+        '<span class="paper-status ' + st.cls + '"' + (v.reason ? ' title="' + esc(v.reason) + '"' : '') + '>' +
+        esc(st.label) + '</span></summary>' +
+      '<div class="paper-body">' +
+        '<p class="paper-title">' + esc(p.title) + '</p>' +
+        '<p class="paper-authors">' + esc(p.authors || '作者未标注') + '</p>' +
+        '<p class="paper-journal">' + esc(p.journal || '出处未标注') + '</p>' +
+        (v.reason ? '<p class="paper-reason">核验说明：' + esc(v.reason) + '</p>' : '') +
+        '<div class="paper-foot">' + link + '</div>' +
+      '</div>' +
+      '</details>';
+  }
+
   /* ── 控制器档案（公式使用标准 TeX） ───────────────── */
-  /* 三对象适用性徽章：来自开发期 99×3 审计（tools/build-fit.js） */
+  /* 三对象适用性徽章：来自开发期 159×3 审计（tools/build-fit.js） */
   function fitBlock(key) {
     const fit = NS.fitData && NS.fitData.verdicts && NS.fitData.verdicts[key];
     if (!fit) return '';
@@ -304,10 +469,99 @@
     return '<div class="fit-row"><span class="fit-label">适用对象</span>' + chips + '</div>' + warn;
   }
 
+  /* 控制律宽度自适应：宁可缩小字号，也不把公式折成两行。
+     量之前先清掉上一次的内联字号，回到 CSS 基准，否则会拿「已缩小的宽度」
+     再算一次，收敛到偏大的固定点。
+     模块级函数：档案 details 展开时由 bind() 的 toggle 监听复用同一次测量。
+     折叠态容器不参与布局（clientWidth=0），必须早退，否则字号会被钉到下限。 */
+  function fitProfileFormula(host) {
+    if (!host) return;
+    const wrap = host.querySelector('.profile-eq .math-wrap');
+    const mathEl = wrap ? wrap.querySelector('.math') : null;
+    if (!wrap || !mathEl || !wrap.clientWidth) return;
+    mathEl.style.fontSize = '';
+    const base = parseFloat(global.getComputedStyle(mathEl).fontSize) || 22;
+    mathEl.style.fontSize = base + 'px';
+    const avail = wrap.clientWidth - 4;
+    const need = mathEl.scrollWidth;
+    if (need > avail && need > 0) {
+      mathEl.style.fontSize = Math.max(14, Math.round(base * avail / need * 10) / 10) + 'px';
+    }
+  }
+
+  /* ── 三栏等高：左右侧栏跟随中间舞台的实际高度 ───────────
+     不用纯 CSS align-items:stretch —— grid 的 auto 行轨道会被左栏
+     159 项列表的 max-content 撑开，实测舞台 932px 会被拉成 1445px。
+     改为监听舞台尺寸并显式同步左右栏高度，行高仍只由舞台内容决定，
+     整页滚动模型不变；侧栏内容超出时由各自 overflow-y:auto 承担。 */
+  function syncColumnHeights() {
+    const stage = $('stage');
+    const browser = $('browser');
+    const inspector = $('inspector');
+    if (!stage || !browser || !inspector) return;
+    /* 仅桌面三栏并排时等高；≤1024px 是堆叠布局（workspace 变 flex），
+       强行同步会让三张卡片各占舞台全高，产生数千像素空白。 */
+    const ws = $('workspace');
+    const isGrid = !ws || getComputedStyle(ws).display === 'grid';
+    if (!isGrid) {
+      [browser, inspector].forEach((el) => { el.style.height = ''; el.style.maxHeight = ''; });
+      return;
+    }
+    const h = Math.round(stage.getBoundingClientRect().height);
+    if (h <= 0) return;
+    [browser, inspector].forEach((el) => {
+      el.style.maxHeight = 'none';
+      el.style.height = h + 'px';
+    });
+  }
+
+  /* 舞台标题栏：空间不足时把「场景预设 / 方程与符号 / 实验指南」
+     退化为图标，保证控制条在宽屏始终一行 */
+  let stageHeadRaf = 0;
+  function syncStageHead() {
+    if (stageHeadRaf) return;
+    stageHeadRaf = global.requestAnimationFrame(() => {
+      stageHeadRaf = 0;
+      const head = doc.querySelector('.stage-head');
+      if (!head) return;
+      head.classList.remove('is-compact', 'is-tight');
+      head.classList.add('is-measuring');
+      const avail = head.clientWidth;
+      let need = head.scrollWidth;
+      if (need > avail + 1) {
+        head.classList.add('is-compact');
+        need = head.scrollWidth;
+        if (need > avail + 1) head.classList.add('is-tight');
+      }
+      head.classList.remove('is-measuring');
+    });
+  }
+
+  function mountColumnSync() {
+    const stage = $('stage');
+    if (!stage) return;
+    syncColumnHeights();
+    syncStageHead();
+    /* 首屏字体与 KaTeX 渲染稍晚，补一帧避免拿到中间态高度 */
+    global.requestAnimationFrame(() => { syncColumnHeights(); syncStageHead(); });
+    if (typeof global.ResizeObserver === 'function') {
+      new global.ResizeObserver(() => {
+        syncColumnHeights();
+        syncStageHead();
+      }).observe(stage);
+    }
+    /* 断点切换（grid ↔ flex）时 stage 尺寸不一定变化，需显式重算 */
+    global.addEventListener('resize', () => { syncColumnHeights(); syncStageHead(); });
+  }
+
   function renderProfile(key) {
     const host = $('controller-profile');
     const conf = D.CONTROLLER_CONFIGS[key];
     if (!host || !conf) return;
+    /* 不记忆折叠状态：外层 details 是静态骨架，innerHTML 重建不会重置它，
+       因此每次渲染都显式回到默认折叠（不读写任何 storage）。 */
+    const profileDetails = $('profile-details');
+    if (profileDetails) profileDetails.open = false;
     const isFav = favorites.indexOf(key) >= 0;
     const approx = D.isApproximation(conf);
     const tex = NS.math.cachedFormula(conf.eq).tex;
@@ -344,26 +598,13 @@
         '<span class="fold-box">' + icon('chevron') + '</span>' +
         '<span class="tuning-tag">调参指引</span></summary>' +
         '<div class="profile-tuning"><span class="tuning-text">' + NS.math.md(conf.tuning) + '</span></div></details>' : '') +
+      paperBlock(key) +
       '</div>';
 
-    /* 控制律宽度自适应：宁可缩小字号，也不把公式折成两行。
-       量之前先清掉上一次的内联字号，回到 CSS 基准，否则会拿「已缩小的宽度」
-       再算一次，收敛到偏大的固定点；布局稳定后再补算一次。 */
-    const fitProfileFormula = () => {
-      const wrap = host.querySelector('.profile-eq .math-wrap');
-      const mathEl = wrap ? wrap.querySelector('.math') : null;
-      if (!wrap || !mathEl) return;
-      mathEl.style.fontSize = '';
-      const base = parseFloat(global.getComputedStyle(mathEl).fontSize) || 22;
-      mathEl.style.fontSize = base + 'px';
-      const avail = wrap.clientWidth - 4;
-      const need = mathEl.scrollWidth;
-      if (need > avail && need > 0) {
-        mathEl.style.fontSize = Math.max(14, Math.round(base * avail / need * 10) / 10) + 'px';
-      }
-    };
-    fitProfileFormula();
-    global.requestAnimationFrame(fitProfileFormula);
+    /* 折叠态会在模块级 fitProfileFormula 里早退（宽度 0）；
+       展开时由 bind() 的 toggle 监听重算，布局稳定后再补算一次。 */
+    fitProfileFormula(host);
+    global.requestAnimationFrame(() => fitProfileFormula(host));
   }
 
   /* ── 参数抽屉 ─────────────────────────────────────── */
@@ -557,8 +798,14 @@
     const tracks = sim.getTracks();
     const active = sim.getActiveTrack();
     if (!tracks.length) { host.innerHTML = '<span class="track-hint">尚无实验轨迹</span>'; return; }
+    /* A/B 叠加时每条轨迹各带自己的论文出处，悬停即可对照两法文献 */
+    const paperTip = (key) => {
+      const P = NS.papers;
+      const p = P && P.getPaper && P.getPaper(key);
+      return p && p.title ? ' · 原论文：' + p.title + (p.journal ? '（' + p.journal + '）' : '') : '';
+    };
     host.innerHTML = tracks.map((t) => '<span class="track-chip' + (t === active ? ' is-active' : '') +
-      '" title="' + esc(t.method) + '"><span class="swatch" style="background:' + esc(t.color) + '"></span>' +
+      '" title="' + esc(t.method + paperTip(t.method)) + '"><span class="swatch" style="background:' + esc(t.color) + '"></span>' +
       esc(t.label) + ' · ' + esc(shortName(t.method)) + ' · ' + t.points.length + ' 点</span>').join('') +
       '<span class="track-hint">' + (sim.isCompareMode() ? '切换控制器时会新建叠加轨迹' : '开启 A/B 对比可叠加多条轨迹') + '</span>';
   }
@@ -594,11 +841,12 @@
       ['R', '重置仿真'], ['D', '施加脉冲扰动'],         ['1 / 2 / 4', '切换仿真倍速'],
       ['H', '打开当前方法教学文档'], ['M', '打开被控对象模型与符号参数'],
       ['F', '专注模式（挂起 / 展开两侧栏）'], ['S', '复制实验参数链接'], ['E', '导出 CSV 数据'],
-      ['G', '打开符号术语词典'], ['P', '打开场景预设'], ['?', '打开本帮助'], ['Esc', '关闭浮层']
+      ['G', '打开符号术语词典'], ['P', '打开场景预设'], ['A', '打开 / 收起智能助手'],
+      ['?', '打开本帮助'], ['Esc', '关闭浮层']
     ];
     host.innerHTML =
       '<section class="help-section"><h3>如何使用</h3><ul>' +
-      '<li>左侧按 11 类体系浏览 ' + D.methodList.length + ' 种控制算法，支持关键词搜索、收藏与最近使用。</li>' +
+      '<li>左侧按 12 类体系浏览 ' + D.methodList.length + ' 种控制算法，支持关键词搜索、收藏与最近使用。</li>' +
       '<li>在刚体动画卡片上选择 3 个经典被控对象之一（质量-弹簧-阻尼、二阶积分器、小车-倒立摆），右侧参数自动切换。</li>' +
       '<li>主舞台的公式条只显示当前对象的动力学方程；点「符号与参数」或按 M，在弹窗里看物理含义、全部符号的当前取值、等效二阶参数与控制输入 u 的施加位置。</li>' +
       '<li>右侧分组调节控制律增益、目标轨迹、硬件非理想条件与对象参数；控制律公式卡会同步显示本方法的 TeX 方程。</li>' +
@@ -612,8 +860,9 @@
       '<section class="help-section"><h3>快捷键</h3><table class="keys-table"><thead><tr><th>按键</th><th>功能</th></tr></thead><tbody>' +
       rows.map((r) => '<tr><td><kbd>' + esc(r[0]) + '</kbd></td><td>' + esc(r[1]) + '</td></tr>').join('') +
       '</tbody></table></section>' +
-      '<section class="help-section"><h3>离线与数据说明</h3><p>本版本为纯 HTML/CSS/JS 三件套，零外部依赖、零网络请求，双击 index.html 即可运行。' +
-      '收藏、最近使用与主题偏好保存在浏览器 localStorage；导出通过 Blob 在本地完成，不会上传任何实验数据。' +
+      '<section class="help-section"><h3>离线与数据说明</h3><p>仿真、曲线与全部教学文档零外部依赖、零网络请求，双击 index.html 即可运行。' +
+      '顶部「智能助手」可在设置里输入自己的 DeepSeek API Key（只保存在本机浏览器），并选择模型与思考长度；本机检索始终离线，联网提问时当前实验方法的文档片段、参数与长期记忆才会发送给你配置的 DeepSeek 服务，未连接时自动降级为本地文档摘录。' +
+      '收藏、最近使用、主题、助手对话与记忆保存在浏览器 localStorage；导出通过 Blob 在本地完成，不会上传实验数据。' +
       esc(D.APPROXIMATION_NOTE) + '</p></section>';
   }
 
@@ -669,7 +918,8 @@
     menu.setAttribute('role', 'menu');
     menu.innerHTML = '<button type="button" role="menuitem" data-export="csv">' + icon('download') + ' 导出实验数据 CSV</button>' +
       '<button type="button" role="menuitem" data-export="png">' + icon('chart') + ' 导出图表 PNG</button>' +
-      '<button type="button" role="menuitem" data-export="md">' + icon('book') + ' 导出公式手册 Markdown</button>';
+      '<button type="button" role="menuitem" data-export="md">' + icon('book') + ' 导出公式手册 Markdown</button>' +
+      '<button type="button" role="menuitem" data-export="papers">' + icon('external') + ' 导出论文出处 CSV</button>';
     doc.body.appendChild(menu);
     const rect = anchor.getBoundingClientRect();
     menu.style.top = (rect.bottom + 8) + 'px';
@@ -681,6 +931,7 @@
       closeExportMenu();
       if (btn.dataset.export === 'csv') cb.exportCSV && cb.exportCSV();
       else if (btn.dataset.export === 'png') cb.exportPNG && cb.exportPNG();
+      else if (btn.dataset.export === 'papers') cb.exportPapers && cb.exportPapers();
       else if (cb.exportFormulaBook) cb.exportFormulaBook();
     });
   }
@@ -713,7 +964,11 @@
     doc.querySelectorAll('[data-close]').forEach((el) => {
       el.addEventListener('click', () => closeOverlay(el.dataset.close));
     });
-    doc.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeAllOverlays(); });
+    doc.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape') return;
+      closeAllOverlays();
+      hideRailPopover(0);
+    });
     doc.addEventListener('click', (ev) => {
       if (exportMenu && !ev.target.closest('.export-menu') && !ev.target.closest('#btn-export')) closeExportMenu();
     });
@@ -799,9 +1054,60 @@
       const btn = ev.target.closest('#btn-profile-star');
       if (btn && cb.toggleFavorite) cb.toggleFavorite(activeMethod);
     });
+
+    /* 「收起参数栏」按钮位于档案 summary 内：阻止点击冒泡触发 details 的默认切换，
+       否则一次点击会同时折叠档案并挂起右栏。rails.js 绑在同一按钮上的收起逻辑
+       仍会执行（preventDefault 不影响其它监听器）。 */
+    const collapseBtn = $('btn-inspector-collapse');
+    if (collapseBtn) collapseBtn.addEventListener('click', (ev) => { ev.preventDefault(); });
+
+    /* 档案展开后重新测量控制律公式：折叠时容器 clientWidth=0，测量会早退，
+       必须等布局稳定后补算一次，否则字号停留在 CSS 基准或被钉到下限。 */
+    const profileDetails = $('profile-details');
+    if (profileDetails) profileDetails.addEventListener('toggle', () => {
+      if (profileDetails.open) {
+        global.requestAnimationFrame(() => fitProfileFormula($('controller-profile')));
+      }
+    });
+
+    /* 挂起态章节导航：悬停 / 键盘聚焦弹出二级目录，移出延迟关闭以便移入卡片 */
+    const railNav = $('rail-nav');
+    const railPop = $('rail-popover');
+    if (railNav && railPop) {
+      const openFrom = (target) => {
+        const btn = target && target.closest ? target.closest('.rail-chapter') : null;
+        if (!btn) return;
+        const idx = Number(btn.dataset.catIndex);
+        if (railPop.hidden || railOpenIndex !== idx) showRailPopover(idx, btn);
+      };
+      railNav.addEventListener('mouseover', (ev) => openFrom(ev.target));
+      railNav.addEventListener('focusin', (ev) => openFrom(ev.target));
+      railNav.addEventListener('mouseleave', () => hideRailPopover(180));
+      railNav.addEventListener('focusout', (ev) => {
+        if (!railPop.contains(ev.relatedTarget)) hideRailPopover(180);
+      });
+      railNav.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('.rail-chapter');
+        if (btn) jumpToChapter(Number(btn.dataset.catIndex));
+      });
+      railPop.addEventListener('mouseenter', () => global.clearTimeout(railHideTimer));
+      railPop.addEventListener('focusin', () => global.clearTimeout(railHideTimer));
+      railPop.addEventListener('mouseleave', () => hideRailPopover(180));
+      railPop.addEventListener('focusout', (ev) => {
+        if (!railNav.contains(ev.relatedTarget) && !railPop.contains(ev.relatedTarget)) hideRailPopover(180);
+      });
+      railPop.addEventListener('click', (ev) => {
+        const item = ev.target.closest('.rail-pop-item[data-method]');
+        if (!item) return;
+        if (cb.selectMethod) cb.selectMethod(item.dataset.method);
+        hideRailPopover(0);
+      });
+      global.addEventListener('resize', () => hideRailPopover(0));
+      global.addEventListener('scroll', () => hideRailPopover(0));
+    }
   }
 
-  function setFavorites(list) { favorites = list.slice(0, 99); renderBrowser(); renderProfile(activeMethod); }
+  function setFavorites(list) { favorites = list.slice(0, D.methodList.length); renderBrowser(); renderProfile(activeMethod); }
   function getFavorites() { return favorites.slice(); }
   function setRecent(list) { recent = list.slice(0, 12); renderBrowser(); }
   function setScope(next) {
@@ -820,9 +1126,6 @@
     setStat('stat-methods', D.methodList.length);
     setStat('stat-categories', D.sortedCategories.length);
     setStat('stat-plants', D.PLANT_LIST.length);
-    /* 侧栏标题里的方法总数同样动态，避免与实际条数脱节 */
-    const railLabel = $('rail-methods-label');
-    if (railLabel) railLabel.textContent = '控制算法体系 · ' + D.methodList.length;
     renderGlossary();
     renderPresets();
     renderHelp();
@@ -833,10 +1136,11 @@
     renderLegend();
     renderTracks();
     bind();
+    mountColumnSync();
   }
 
   NS.ui = {
-    init, setFavorites, getFavorites, setRecent, setScope,
+    init, setFavorites, getFavorites, setRecent, setScope, syncColumnHeights,
     setActiveMethod, renderBrowser, renderProfile, renderPlant, renderPlantModel, renderParams,
     renderLegend, renderTracks, updateMetrics, updateStatus,
     openOverlay, openOverlayById, closeOverlay, closeAllOverlays,

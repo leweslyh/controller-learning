@@ -74,12 +74,8 @@
 
     doc.addEventListener('click', (ev) => {
       const item = ev.target.closest('.method-item[data-method]');
-      if (item) {
-        const rail = doc.getElementById('rail-current');
-        if (rail) rail.textContent = String(item.dataset.method).slice(0, 7);
-        return;
-      }
-      if (ev.target.closest('#btn-rail-docs') || ev.target.closest('#btn-sim-guide')) {
+      if (item) return;
+      if (ev.target.closest('#btn-sim-guide')) {
         if (NS.docs && NS.docs.open && NS.sim && NS.sim.getSettings) {
           NS.docs.open(NS.sim.getSettings().method);
         }
