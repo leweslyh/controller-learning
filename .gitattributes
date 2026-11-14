@@ -1,0 +1,29 @@
+# ============================================================
+# 控制理论模拟器 V5.0 · 文本规范化
+# 保证跨平台（Windows / macOS / Linux）换行与合并行为一致
+# ============================================================
+
+* text=auto eol=lf
+
+*.html text eol=lf
+*.css  text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf
+*.svg  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# 二进制资源不做换行转换
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.zip   binary

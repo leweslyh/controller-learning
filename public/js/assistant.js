@@ -1,8 +1,10 @@
 /* ============================================================
-   assistant.js — 智能助手（V4.0）
+   assistant.js — 智能助手（V5.0）
    ------------------------------------------------------------
    · 可拖动、可记忆位置的非模态浮窗，沿用纸面实验室设计令牌
-   · RAG：V4.0 的 public/docs/methods/*.md → window.__DOCS__，
+   · 后端：同源 Netlify Functions 2.0（netlify/functions/api/chat.js）
+     auto 模式下代理失败会自动回落浏览器直连，file:// 直开则只走直连
+   · RAG：V5.0 的 public/docs/methods/*.md → window.__DOCS__，
      按 ## 章节分块，BM25 + 方法名加权，并强制关联当前实验方法文档
    · DeepSeek 设置：API Key（使用者输入、仅存 localStorage）、
      模型（deepseek-flash / deepseek-v4-pro）、思考长度
@@ -722,12 +724,15 @@
       emitted = true;
       if (onDelta) onDelta(piece, full);
     };
-    if (mode === 'proxy') return callProxy(messages, options, signal, deliver, onReasoning);
-    return callDirect(messages, options, signal, deliver, onReasoning).catch((err) => {
-      /* 已开始输出、用户终止或自动模式不可回落时直接抛出，避免重复回答 */
-      if (emitted || stopped || state.mode !== 'auto' || !global.location ||
-        global.location.protocol === 'file:') throw err;
-      return callProxy(messages, options, signal, onDelta, onReasoning);
+    /* 直连场景：用户显式选「浏览器直连」，或 file:// 直开没有同源后端 */
+    if (mode === 'direct') return callDirect(messages, options, signal, deliver, onReasoning);
+    /* 显式选「同源代理」：尊重用户选择，不做回落 */
+    if (state.mode === 'proxy') return callProxy(messages, options, signal, deliver, onReasoning);
+    /* auto（http/https）：优先同源代理；函数缺失/报错且尚未输出时回落直连，
+       避免 V4.0 里「/api/chat 一 404 就整段降级离线」的问题 */
+    return callProxy(messages, options, signal, deliver, onReasoning).catch((err) => {
+      if (emitted || stopped) throw err;
+      return callDirect(messages, options, signal, onDelta, onReasoning).catch(() => { throw err; });
     });
   }
   function failureHint(err) {
@@ -736,8 +741,10 @@
     if (code === 'no_proxy') return '**提示**：当前是 file:// 直开，没有同源代理；请启动本地服务或在设置里改用「浏览器直连」。';
     if (code.indexOf('http_401') === 0) return '**提示**：DeepSeek 返回 401，请检查设置里的 API Key。';
     if (code.indexOf('http_429') === 0) return '**提示**：请求过于频繁或额度不足，请稍后重试。';
-    if (code.indexOf('http_') === 0) return '**提示**：DeepSeek 返回 ' + code.slice(5) + '，请检查模型名、密钥与额度。';
-    return '**提示**：未能连接 DeepSeek。官方接口默认不开放浏览器跨域，可在「设置」里把连接方式改为「同源代理」并启动本地服务；当前回答为本地检索摘录。';
+    if (code === 'http_404') return '**提示**：同源后端 `/api/chat` 不存在，通常是 Netlify Functions 未部署或路由未生效。请在站点 Deploys 确认构建成功、Functions 面板能看到 `api/chat`；也可在「设置」里把连接方式改为「浏览器直连」临时绕过。';
+    if (code.indexOf('http_5') === 0) return '**提示**：后端已连上但上游模型异常（状态 ' + code.slice(5) + '），请检查 API Key、模型名与额度。';
+    if (code.indexOf('http_') === 0) return '**提示**：请求返回 ' + code.slice(5) + '，请检查模型名、密钥与额度。';
+    return '**提示**：未能连接大模型。若为公开部署，请确认 `/api/chat` 函数已上线；也可在「设置」里改用「浏览器直连」。当前回答为本地检索摘录。';
   }
 
   /* ── 浮窗 UI ────────────────────────────────────────── */
@@ -1065,7 +1072,8 @@
     busy = true;
     stopped = false;
     const controller = global.AbortController ? new global.AbortController() : null;
-    const timer = controller ? global.setTimeout(() => controller.abort(), 90000) : null;
+    /* 前端等待上限 55s：与 Netlify Functions 的同步执行上限（60s）对齐 */
+    const timer = controller ? global.setTimeout(() => controller.abort(), 55000) : null;
     abortCurrent = controller ? () => controller.abort() : null;
     toggleBusy(true);
     el.input.value = '';

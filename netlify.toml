@@ -1,29 +1,27 @@
 # ============================================================
-# Netlify 站点配置
-# 目录约定（前后端分离）：
-#   public/     前端静态站 —— Netlify 的 publish 目录
-#               index.html + styles.css + js/ + vendor/ + assets/ + docs/
-#               整站零构建、零依赖，可直接双击 public/index.html 离线运行
-#   functions/  后端 —— Netlify Functions（无服务器），/api/* 自动路由到函数
-#   tools/      开发期校验与生成脚本（不参与发布）
-#   screenshots/ README 配图（不参与发布）
+# 控制理论模拟器 V5.0 · Netlify 配置（前后端分离）
+# ------------------------------------------------------------
+#   public/                前端静态站 —— publish 目录
+#                          index.html + styles.css + js/ + vendor/ + assets/ + docs/
+#                          零构建、零依赖，可双击 public/index.html 离线运行
+#   netlify/functions/     后端 —— Netlify Functions 2.0
+#                          Netlify 默认扫描目录，无需在 UI 里再指定
+#                          路由由函数内 export const config = { path } 声明
+#   tools/                 本地预览与开发脚本（不参与发布）
+#
+# 注意：Functions 2.0 的 config.path 已直接提供路由。
+#       不要再写 [[redirects]] /api/* → /.netlify/functions/:splat，
+#       否则请求会被重写到函数并未注册的默认路径，反而 404。
 # ============================================================
 
 [build]
-  publish    = "public"
-  functions  = "functions"
+  publish   = "public"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
 
-# ── API 路由：/api/* → functions/api/* ──────────────────
-# 前端若要调用后端，直接 fetch('/api/health') 即可，无需知道函数名。
-[[redirects]]
-  from   = "/api/*"
-  to     = "/.netlify/functions/:splat"
-  status = 200
-
-# ── 全站安全头（缓存策略见 public/_headers） ───────────
+# ── 全站安全头（静态缓存策略见 public/_headers） ──────────
 [[headers]]
   for = "/*"
   [headers.values]
@@ -32,7 +30,7 @@
     X-Frame-Options        = "SAMEORIGIN"
     Permissions-Policy     = "geolocation=(), microphone=(), camera=()"
 
-# ── 后端函数响应：禁止被 CDN 长缓存 ────────────────────
+# ── 函数响应禁止 CDN 缓存 ─────────────────────────────────
 [[headers]]
   for = "/api/*"
   [headers.values]

@@ -1,3 +1,8 @@
+# ============================================================
+# 控制理论模拟器 V5.0 · Git 忽略规则
+# 目录约定：public/ 前端静态站；netlify/functions/ 后端函数
+# ============================================================
+
 # 依赖与构建产物（本项目零依赖，列出以防误提交）
 node_modules/
 .netlify/
@@ -9,14 +14,23 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# 浏览器验收截图（verify-file-protocol.js 的运行产物，非源码）
+# 浏览器验收截图与缓存（非源码，可重算）
 screenshots/
-
-# 浏览器验收缓存（可重算产物，不入库）
 .playwright-cli/
 
-# V4.0 移植中间产物（可由 tools/port-v4-*.js 重算；联网核验结果保留作可追溯依据）
-tools/_port/
+# 本地环境变量：真实密钥只放 Netlify 环境变量或本机 .env
+.env
+.env.local
+.env.*.local
 
-# 开发期脚本与工具：按需求不入库（站点运行不依赖 tools/）
-tools/
+# 编辑器与系统文件
+.vscode/
+.idea/
+*.swp
+
+# 打包产物
+*.zip
+
+# 说明：tools/assistant-server.mjs 是本地预览服务器，属于项目源码，随仓库入库；
+#       V5.0 未包含 V4.0 的一次性移植 / 审计脚本，后续如加入开发期工具，
+#       可在此追加（例如：tools/_port/）。

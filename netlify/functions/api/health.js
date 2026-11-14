@@ -1,13 +1,14 @@
 /* ============================================================
-   GET /api/health — 后端健康检查与站点自述
+   GET /api/health — 后端健康检查与站点自述（V5.0）
    ------------------------------------------------------------
-   返回后端自身状态 + 前端静态站的规模常量，供前端探测
-   「当前是本地 file:// 直开，还是已部署到 Netlify」。
+   · 路由：Netlify Functions 2.0 的 config.path，无需 redirect
+   · 前端可用它判断「后端函数是否已部署成功」
+   · 同时回显后端是否配置了 DEEPSEEK_API_KEY（不回显密钥本身）
    ============================================================ */
 
 const APP = {
-  name: '控制理论模拟器 V4.0 · 纸面控制实验室',
-  version: '4.0',
+  name: '控制理论模拟器 V5.0 · 纸面控制实验室',
+  version: '5.0',
   methods: 159,
   categories: 12,
   plants: 3,
@@ -37,8 +38,11 @@ export default async function handler(req) {
     app: APP,
     runtime: {
       runtime: 'netlify-function',
+      functionsDir: 'netlify/functions',
       region: process.env.AWS_REGION || 'unknown',
-      node: process.version
+      node: process.version,
+      envKey: !!process.env.DEEPSEEK_API_KEY,
+      baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
     },
     time: new Date().toISOString()
   });

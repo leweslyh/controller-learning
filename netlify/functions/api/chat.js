@@ -1,6 +1,8 @@
 /* ============================================================
-   POST /api/chat — 智能助手的 DeepSeek 同源转发
+   POST /api/chat — 智能助手的 DeepSeek 同源转发（V5.0）
    ------------------------------------------------------------
+   · 路由：Netlify Functions 2.0 的 config.path，无需 redirect
+   · Netlify 同步执行上限 60s，流式上游超时取 55s 留余量
    · API Key 由使用者在助手设置里输入，保存在浏览器 localStorage，
      随每次请求以 apiKey 字段发来；服务端不存储、不记录、不回显。
      未携带时回退环境变量 DEEPSEEK_API_KEY（兼容旧部署）。
@@ -115,7 +117,8 @@ export default async function handler(req) {
         'Authorization': 'Bearer ' + key
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(stream ? 120000 : 30000)
+      /* Netlify Functions 同步执行上限 60s：流式 55s，非流式 30s */
+      signal: AbortSignal.timeout(stream ? 55000 : 30000)
     });
   } catch (err) {
     const timeout = err && (err.name === 'TimeoutError' || err.name === 'AbortError');

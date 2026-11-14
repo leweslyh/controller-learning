@@ -1,8 +1,18 @@
-# 控制理论模拟器 V4.0
+# 控制理论模拟器 V5.0
 
-面向控制理论教学、算法对比演示与参数整定实验的单页实验工作台：**159 种控制器**（分属 **12 类理论体系**），每种一份完整教学文档与**可核查的原论文出处**，**3 个经典被控对象**各有专属动画与方程。纯 HTML / CSS / JavaScript 三件套，零外部依赖、零构建步骤、零网络请求，双击 `public/index.html` 即可离线运行；智能助手可选配同源后端调用 DeepSeek 大模型；也可直接部署到 Netlify（`public/` 为前端、`functions/api/` 为后端）。
+面向控制理论教学、算法对比演示与参数整定实验的单页实验工作台：**159 种控制器**（分属 **12 类理论体系**），每种一份完整教学文档与**可核查的原论文出处**，**3 个经典被控对象**各有专属动画与方程。纯 HTML / CSS / JavaScript 三件套，零外部依赖、零构建步骤、零网络请求，双击 `public/index.html` 即可离线运行；智能助手通过同源后端调用大模型；按 Netlify 官方约定做前后端分离部署（`public/` 为前端、`netlify/functions/api/` 为后端）。
 
-> 目录 `控制理论模拟器V4.0/`，内容版本 V4.0。V3.0 原目录保持只读、未改动。
+> 目录 `控制理论模拟器V5.0/`，内容版本 V5.0。V4.0 / V3.0 原目录保持只读、未改动。
+
+## V5.0 本轮改动（Netlify 前后端分离）
+
+V5.0 只做部署架构与鲁棒性改造，前端交互、159 法文档、公式与仿真结果保持不变：
+
+- **后端迁入 Netlify 默认识别目录**：`functions/api/` → `netlify/functions/api/`。Netlify 默认扫描 `YOUR_BASE_DIRECTORY/netlify/functions`，即使 UI 里不填 Functions directory 也能识别，避免「只上传 public、函数一个都没部署」。
+- **删除与 `config.path` 冲突的 rewrite**：三个函数都用 Functions 2.0 的 `export const config = { path: '/api/…' }` 声明路由；V4.0 的 `[[redirects]] /api/* → /.netlify/functions/:splat` 会把请求重写到函数并未注册的默认路径，导致即使部署成功也 404，V5.0 已移除。
+- **`auto` 模式增加回落**：同源 `/api/chat` 缺失或报错且尚未输出时，自动回落浏览器直连；`file://` 直开仍只走直连。配合 404 专用提示，线上函数没上线时不再无声降级为离线检索。
+- **超时对齐平台上限**：Netlify Functions 同步执行上限 60s，上游流式超时取 55s，前端等待上限同步改 55s（原 120s / 90s 会被平台提前掐断）。
+- **`public/_headers` 补 `/api/*` no-store**：不依赖 `netlify.toml` 的 headers 段，手动部署同样生效。
 
 ## V4.0 本轮改动（2026-11-14）
 
@@ -67,7 +77,14 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 # 打开 http://localhost:8713
 ```
 
-部署到 Netlify 时在站点环境变量设置 `DEEPSEEK_API_KEY`；未设置密钥或请求失败时，助手自动降级为纯本地文档摘录，不影响任何仿真功能。
+**部署到 Netlify（前后端分离）**：
+
+- 前端 `public/` 为 publish 目录；后端 `netlify/functions/` 为函数目录（Netlify 默认路径，无需在 UI 额外指定）。
+- 推荐 **Git 连动部署**：仓库根目录就是本项目，Netlify 读取 `netlify.toml` 的 `publish = "public"`、`functions = "netlify/functions"`，每次 `git push` 自动重建。
+- 也可用 CLI 手动部署并显式带函数：`npx netlify-cli deploy --prod --dir=public --functions=netlify/functions`。
+- **不要**用「拖拽 / Deploy manually」只上传 `public/`：那不会打包函数，`/api/chat` 会 404。
+- 部署后在站点环境变量设置 `DEEPSEEK_API_KEY`（可选），再访问 `/api/health` 确认返回 JSON。
+- 未设置密钥或请求失败时，助手自动降级为纯本地文档摘录，不影响任何仿真功能。
 
 **安全**：API Key 只在服务端环境变量读取，`public/` 不含密钥；`/api/chat` 默认无鉴权，公开部署时请在平台侧补上访问控制或速率限制。对话与记忆只存本机浏览器，提问与检索片段会发送给你配置的模型服务。
 
@@ -100,8 +117,9 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 ## 2. 目录结构
 
 ```
-控制理论模拟器V3.0/
-├── netlify.toml               Netlify 站点配置（publish / functions / 路由 / 安全头）
+控制理论模拟器V5.0/
+├── netlify.toml               Netlify 站点配置（publish=public、functions=netlify/functions、安全头）
+├── package.json               项目清单（ESM；npm run dev 启动本地预览）
 ├── public/                    ← 前端静态站（Netlify 的 publish 目录）
 │   ├── index.html             页面入口：语义骨架、SVG sprite、挂起条、文档阅读器
 │   ├── styles.css             纸面实验室设计令牌（纸/墨/硬投影/胶囊）、双主题、折叠布局、TeX 排版
@@ -127,10 +145,11 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 │   │   ├── 调参建议.json       对象专用参数搜索结果
 │   │   └── 对象调参-freeMass.json  默认对象逐方法增益搜索结果（由 tools/audit-plant.js 输出）
 │   └── _headers               缓存与安全头（随 publish 目录发布，任意静态托管可用）
-├── functions/api/             ← 后端（Netlify Functions / 无服务器）
-│   ├── chat.js               /api/chat —— DeepSeek 同源代理（可选）
-│   ├── health.js              GET /api/health —— 健康检查与站点自述
-│   └── share.js               /api/share      —— 实验快照存取（内存存储，可换 Blobs）
+├── netlify/functions/         ← 后端（Netlify Functions 2.0，默认扫描目录）
+│   └── api/
+│       ├── chat.js            /api/chat —— DeepSeek 同源代理（可选）
+│       ├── health.js          GET /api/health —— 健康检查与部署自检
+│       └── share.js           /api/share —— 实验快照存取（内存存储，可换 Blobs）
 ├── tools/assistant-server.mjs  # 智能助手本地预览服务器（可选）
 ├── tools/port-v4-*.js         # V4.0 一次性移植与验收工具
 ├── tools/                     开发期校验与生成脚本（不参与发布）
