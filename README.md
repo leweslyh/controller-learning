@@ -119,7 +119,6 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 ```
 控制理论模拟器V5.0/
 ├── netlify.toml               Netlify 站点配置（publish=public、functions=netlify/functions、安全头）
-├── package.json               项目清单（ESM；npm run dev 启动本地预览）
 ├── public/                    ← 前端静态站（Netlify 的 publish 目录）
 │   ├── index.html             页面入口：语义骨架、SVG sprite、挂起条、文档阅读器
 │   ├── styles.css             纸面实验室设计令牌（纸/墨/硬投影/胶囊）、双主题、折叠布局、TeX 排版
