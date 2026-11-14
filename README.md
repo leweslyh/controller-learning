@@ -1,6 +1,6 @@
 # 控制理论模拟器 V5.0
 
-面向控制理论教学、算法对比演示与参数整定实验的单页实验工作台：**159 种控制器**（分属 **12 类理论体系**），每种一份完整教学文档与**可核查的原论文出处**，**3 个经典被控对象**各有专属动画与方程。纯 HTML / CSS / JavaScript 三件套，零外部依赖、零构建步骤、零网络请求，双击 `public/index.html` 即可离线运行；智能助手通过同源后端调用大模型；按 Netlify 官方约定做前后端分离部署（`public/` 为前端、`netlify/functions/api/` 为后端）。
+面向控制理论教学、算法对比演示与参数整定实验的单页实验工作台：**159 种控制器**（分属 **12 类理论体系**），每种一份完整教学文档与**可核查的原论文出处**，**3 个经典被控对象**各有专属动画与方程。纯 HTML / CSS / JavaScript 三件套，零外部依赖、零构建步骤、零网络请求，双击 `public/index.html` 即可离线运行；智能助手通过同源后端调用大模型；按 Netlify 官方约定做前后端分离部署（`public/` 为前端、`netlify/functions/` 为后端，函数文件置于该目录顶层）。
 
 > 目录 `控制理论模拟器V5.0/`，内容版本 V5.0。V4.0 / V3.0 原目录保持只读、未改动。
 
@@ -8,7 +8,7 @@
 
 V5.0 只做部署架构与鲁棒性改造，前端交互、159 法文档、公式与仿真结果保持不变：
 
-- **后端迁入 Netlify 默认识别目录**：`functions/api/` → `netlify/functions/api/`。Netlify 默认扫描 `YOUR_BASE_DIRECTORY/netlify/functions`，即使 UI 里不填 Functions directory 也能识别，避免「只上传 public、函数一个都没部署」。
+- **后端函数置于 `netlify/functions/` 顶层（关键修复）**：原 `netlify/functions/api/chat.js` 这种嵌套两层布局 Netlify 不识别——它只认 `functions/<name>.js`、`functions/<name>/<name>.js`、`functions/<name>/index.js` 三种模式，嵌套两层会让函数整体不被打包、`/api/*` 全 404。V5.0 已改为 `netlify/functions/chat.js` 等顶层文件，路由仍由 `config.path` 挂到 `/api/*`。
 - **删除与 `config.path` 冲突的 rewrite**：三个函数都用 Functions 2.0 的 `export const config = { path: '/api/…' }` 声明路由；V4.0 的 `[[redirects]] /api/* → /.netlify/functions/:splat` 会把请求重写到函数并未注册的默认路径，导致即使部署成功也 404，V5.0 已移除。
 - **`auto` 模式增加回落**：同源 `/api/chat` 缺失或报错且尚未输出时，自动回落浏览器直连；`file://` 直开仍只走直连。配合 404 专用提示，线上函数没上线时不再无声降级为离线检索。
 - **超时对齐平台上限**：Netlify Functions 同步执行上限 60s，上游流式超时取 55s，前端等待上限同步改 55s（原 120s / 90s 会被平台提前掐断）。
@@ -145,11 +145,11 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 │   │   ├── 调参建议.json       对象专用参数搜索结果
 │   │   └── 对象调参-freeMass.json  默认对象逐方法增益搜索结果（由 tools/audit-plant.js 输出）
 │   └── _headers               缓存与安全头（随 publish 目录发布，任意静态托管可用）
-├── netlify/functions/         ← 后端（Netlify Functions 2.0，默认扫描目录）
-│   └── api/
-│       ├── chat.js            /api/chat —— DeepSeek 同源代理（可选）
-│       ├── health.js          GET /api/health —— 健康检查与部署自检
-│       └── share.js           /api/share —— 实验快照存取（内存存储，可换 Blobs）
+├── netlify/functions/         ← 后端（Netlify Functions 2.0，默认扫描顶层文件）
+│   ├── chat.js                /api/chat —— DeepSeek 同源代理（可选）
+│   ├── health.js              GET /api/health —— 健康检查与部署自检
+│   ├── share.js               /api/share —— 实验快照存取（内存存储，可换 Blobs）
+│   └── package.json           {"type":"module"}
 ├── tools/assistant-server.mjs  # 智能助手本地预览服务器（可选）
 ├── tools/port-v4-*.js         # V4.0 一次性移植与验收工具
 ├── tools/                     开发期校验与生成脚本（不参与发布）

@@ -2,7 +2,7 @@
    assistant.js — 智能助手（V5.0）
    ------------------------------------------------------------
    · 可拖动、可记忆位置的非模态浮窗，沿用纸面实验室设计令牌
-   · 后端：同源 Netlify Functions 2.0（netlify/functions/api/chat.js）
+   · 后端：同源 Netlify Functions 2.0（netlify/functions/chat.js）
      auto 模式下代理失败会自动回落浏览器直连，file:// 直开则只走直连
    · RAG：V5.0 的 public/docs/methods/*.md → window.__DOCS__，
      按 ## 章节分块，BM25 + 方法名加权，并强制关联当前实验方法文档

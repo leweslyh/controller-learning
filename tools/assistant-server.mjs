@@ -2,7 +2,7 @@
    tools/assistant-server.mjs — 本地智能助手服务（零依赖）
    ------------------------------------------------------------
    同时提供 public/ 静态站与 /api/chat 代理，复用 Netlify 函数
-   netlify/functions/api/chat.js 的同一个处理器，避免两套实现漂移。
+   netlify/functions/chat.js 的同一个处理器，避免两套实现漂移。
    运行（PowerShell）：
      $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
    然后打开 http://localhost:8713 。不设置密钥时助手走离线检索。
@@ -11,7 +11,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import chatHandler from '../netlify/functions/api/chat.js';
+import chatHandler from '../netlify/functions/chat.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', 'public');
