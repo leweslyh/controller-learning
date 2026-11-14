@@ -1,0 +1,92 @@
+{
+  "plant": "freeMass",
+  "plantOverrides": {},
+  "tuning": {
+    "OpenLoop": {
+      "u_static": 0.1
+    },
+    "P": {
+      "kp": 34
+    },
+    "PI": {
+      "kp": 41,
+      "ki": 0
+    },
+    "IncPID": {
+      "kp": 84,
+      "ki": 0.69,
+      "kd": 39.8
+    },
+    "BangBang": {
+      "force": 11
+    },
+    "Relay": {
+      "force": 79
+    },
+    "LevantHOSM": {
+      "l1": 2,
+      "l2": 26,
+      "k_gain": 6
+    },
+    "MFAC": {
+      "eta": 1.2,
+      "mu": 0.1,
+      "kd": 2.3
+    },
+    "BELBIC": {
+      "a_A": 4.8,
+      "a_O": 11.1,
+      "w_v": 0.4
+    },
+    "NL-ADRC": {
+      "w_o": 9,
+      "w_c": 2,
+      "b0": 0.43
+    },
+    "T-DOB": {
+      "kp": 5,
+      "kd": 14.8,
+      "delay_d": 9
+    },
+    "BLF": {
+      "kp": 31,
+      "kd": 2.6
+    },
+    "ETC": {
+      "sigma": 0.01,
+      "kp": 32,
+      "kd": 22,
+      "eps0": 0.01
+    },
+    "ILC": {
+      "gamma_ilc": 0.9,
+      "kp_base": 1
+    },
+    "GPC": {
+      "ny": 20,
+      "lam": 1.08
+    },
+    "RLS-Adaptive": {
+      "rls_lambda": 0.92,
+      "w_bw": 15.7
+    },
+    "Event-Triggered-MPC": {
+      "t_pred": 0.2,
+      "lambda": 0.002,
+      "et_limit": 0.01
+    },
+    "Speed-Gradient": {
+      "q_weight": 2.2
+    }
+  },
+  "bad": [
+    "P",
+    "PI",
+    "BangBang",
+    "Relay",
+    "Linear-Actor-Critic",
+    "ILC",
+    "RLS-Adaptive",
+    "Lorenz-Coupled"
+  ]
+}

@@ -1,0 +1,39 @@
+# ============================================================
+# Netlify 站点配置
+# 目录约定（前后端分离）：
+#   public/     前端静态站 —— Netlify 的 publish 目录
+#               index.html + styles.css + js/ + vendor/ + assets/ + docs/
+#               整站零构建、零依赖，可直接双击 public/index.html 离线运行
+#   functions/  后端 —— Netlify Functions（无服务器），/api/* 自动路由到函数
+#   tools/      开发期校验与生成脚本（不参与发布）
+#   screenshots/ README 配图（不参与发布）
+# ============================================================
+
+[build]
+  publish    = "public"
+  functions  = "functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# ── API 路由：/api/* → functions/api/* ──────────────────
+# 前端若要调用后端，直接 fetch('/api/health') 即可，无需知道函数名。
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/:splat"
+  status = 200
+
+# ── 全站安全头（缓存策略见 public/_headers） ───────────
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"
+    X-Frame-Options        = "SAMEORIGIN"
+    Permissions-Policy     = "geolocation=(), microphone=(), camera=()"
+
+# ── 后端函数响应：禁止被 CDN 长缓存 ────────────────────
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"

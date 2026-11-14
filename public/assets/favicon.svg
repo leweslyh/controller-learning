@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- 纸面控制实验室 favicon：纸面圆角方块 + 墨线描边 + 锈橙响应曲线（与顶栏品牌标同源） -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#eaf5ea" stroke="#151715" stroke-width="2"/>
+  <polyline points="24 16 20.8 16 18.4 23.2 13.6 8.8 11.2 16 8 16"
+    fill="none" stroke="#c46a24" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

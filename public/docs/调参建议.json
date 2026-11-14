@@ -1,0 +1,833 @@
+{
+  "global": {
+    "PI": {
+      "kp": 3,
+      "ki": 0.5
+    },
+    "ISMC": {
+      "c1": 0.5,
+      "c2": 0.5,
+      "k_gain": 2
+    },
+    "TSMC": {
+      "beta": 1.3,
+      "k_gain": 4
+    },
+    "FTSMC": {
+      "c1": 0.4,
+      "c2": 0.2,
+      "k_gain": 2
+    },
+    "ASMC": {
+      "c_surface": 1.3,
+      "gamma": 13
+    },
+    "ESC": {
+      "k_esc": 5
+    },
+    "BELBIC": {
+      "a_A": 2.5,
+      "a_O": 1.3,
+      "w_e": 0.5,
+      "w_v": 0.3
+    },
+    "L1": {
+      "gamma": 1800,
+      "wn": 3.6
+    },
+    "T-DOB": {
+      "kp": 10,
+      "kd": 5
+    },
+    "BLF": {
+      "kp": 5,
+      "kd": 2.5
+    },
+    "ETC": {
+      "kp": 4,
+      "kd": 2
+    },
+    "Posicast": {
+      "kp": 4,
+      "kd": 2,
+      "k_pos": 0.03
+    },
+    "EKF-Ctrl": {
+      "kp": 20,
+      "kd": 10
+    },
+    "Speed-Gradient": {
+      "gamma_sg": 2,
+      "q_weight": 0.1
+    }
+  },
+  "plant": {
+    "freeMass": {
+      "P": {
+        "kp": 10
+      },
+      "PI": {
+        "kp": 15,
+        "ki": 2.5
+      },
+      "IncPID": {
+        "kp": 18,
+        "ki": 0.9,
+        "kd": 9
+      },
+      "ISMC": {
+        "c1": 0.5,
+        "c2": 0.5,
+        "k_gain": 2
+      },
+      "TSMC": {
+        "beta": 1.3,
+        "k_gain": 4
+      },
+      "FTSMC": {
+        "c1": 0.4,
+        "c2": 0.2,
+        "k_gain": 2
+      },
+      "ASMC": {
+        "c_surface": 2.5,
+        "gamma": 25
+      },
+      "STR": {
+        "gamma": 9,
+        "wn": 3.6
+      },
+      "ESC": {
+        "k_esc": 5
+      },
+      "BELBIC": {
+        "a_A": 1,
+        "a_O": 0.5,
+        "w_e": 0.2,
+        "w_v": 0.1
+      },
+      "ESO-SMC": {
+        "w_o": 15,
+        "c_surface": 2.5,
+        "k_gain": 5,
+        "b0": 0.25
+      },
+      "T-DOB": {
+        "kp": 10,
+        "kd": 5
+      },
+      "Posicast": {
+        "kp": 4,
+        "kd": 2,
+        "k_pos": 0.03
+      },
+      "FuzzyPID": {
+        "kp0": 8,
+        "ki0": 1.3,
+        "kd0": 3.8
+      },
+      "Speed-Gradient": {
+        "gamma_sg": 10,
+        "q_weight": 0.5
+      }
+    },
+    "pendulum": {
+      "LQG": {
+        "q_x": 50,
+        "q_v": 5,
+        "r_w": 0.5
+      },
+      "H-Infinity": {
+        "gamma": 1.1,
+        "q_x": 50
+      },
+      "SMC": {
+        "c_surface": 2.5,
+        "k_gain": 5
+      },
+      "ISMC": {
+        "c1": 1.3,
+        "c2": 1.3,
+        "k_gain": 5
+      },
+      "TSMC": {
+        "beta": 0.5,
+        "k_gain": 2
+      },
+      "FTSMC": {
+        "c1": 0.4,
+        "c2": 0.2,
+        "k_gain": 2
+      },
+      "ASMC": {
+        "c_surface": 0.5,
+        "gamma": 5
+      },
+      "MRAC": {
+        "gamma": 18,
+        "wn": 3.6
+      },
+      "Linear-Actor-Critic": {
+        "alpha_c": 3.6,
+        "alpha_a": 9,
+        "gamma_rl": 0.99
+      },
+      "Gradient-PID": {
+        "gamma_p": 0.9,
+        "gamma_d": 0.18,
+        "kp0": 18
+      },
+      "ADRC": {
+        "w_o": 15,
+        "w_c": 5,
+        "b0": 0.25
+      },
+      "NL-ADRC": {
+        "w_o": 15,
+        "w_c": 5,
+        "b0": 0.25
+      },
+      "ESO-SMC": {
+        "w_o": 15,
+        "c_surface": 2.5,
+        "k_gain": 5,
+        "b0": 0.25
+      },
+      "ILC": {
+        "gamma_ilc": 1.8,
+        "kp_base": 18
+      },
+      "EKF-Ctrl": {
+        "kp": 20,
+        "kd": 10
+      },
+      "Neural-RBF-ADRC": {
+        "wo": 15,
+        "wc": 5,
+        "n_lr": 2.5,
+        "b0": 0.25
+      }
+    }
+  },
+  "unsolved": [
+    {
+      "plant": "msd",
+      "method": "IncPID",
+      "grade": "saturated"
+    },
+    {
+      "plant": "msd",
+      "method": "Linear-Actor-Critic",
+      "grade": "unstable"
+    },
+    {
+      "plant": "msd",
+      "method": "NL-ADRC",
+      "grade": "saturated"
+    },
+    {
+      "plant": "msd",
+      "method": "RLS-Adaptive",
+      "grade": "saturated"
+    },
+    {
+      "plant": "msd",
+      "method": "Lorenz-Coupled",
+      "grade": "unstable"
+    },
+    {
+      "plant": "freeMass",
+      "method": "OpenLoop",
+      "grade": "unstable"
+    },
+    {
+      "plant": "freeMass",
+      "method": "IMP-Servo",
+      "grade": "unstable"
+    },
+    {
+      "plant": "freeMass",
+      "method": "Linear-Actor-Critic",
+      "grade": "unstable"
+    },
+    {
+      "plant": "freeMass",
+      "method": "NL-ADRC",
+      "grade": "saturated"
+    },
+    {
+      "plant": "freeMass",
+      "method": "RLS-Adaptive",
+      "grade": "saturated"
+    },
+    {
+      "plant": "freeMass",
+      "method": "Lorenz-Coupled",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "OpenLoop",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "IncPID",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "LQR",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "LQR-I",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "QFT-LeadLag",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "IMP-Servo",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "Relay",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "TDC",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "STR",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "BELBIC",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "IMC",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "T-DOB",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "BLF",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "TubeMPC",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "RLS-Adaptive",
+      "grade": "saturated"
+    },
+    {
+      "plant": "pendulum",
+      "method": "Artstein-Reduction",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "Lorenz-Coupled",
+      "grade": "unstable"
+    },
+    {
+      "plant": "pendulum",
+      "method": "Speed-Gradient",
+      "grade": "unstable"
+    }
+  ],
+  "improved": [
+    {
+      "plant": "msd",
+      "method": "PI",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "kp": 3,
+        "ki": 0.5
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "ISMC",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "c1": 0.5,
+        "c2": 0.5,
+        "k_gain": 2
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "TSMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "beta": 1.3,
+        "k_gain": 4
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "FTSMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "c1": 0.4,
+        "c2": 0.2,
+        "k_gain": 2
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "ASMC",
+      "before": "saturated",
+      "after": "fair",
+      "params": {
+        "c_surface": 1.3,
+        "gamma": 13
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "ESC",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "k_esc": 5
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "BELBIC",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "a_A": 2.5,
+        "a_O": 1.3,
+        "w_e": 0.5,
+        "w_v": 0.3
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "L1",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "gamma": 1800,
+        "wn": 3.6
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "T-DOB",
+      "before": "saturated",
+      "after": "poor",
+      "params": {
+        "kp": 10,
+        "kd": 5
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "BLF",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "kp": 5,
+        "kd": 2.5
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "ETC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "kp": 4,
+        "kd": 2
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "Posicast",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "kp": 4,
+        "kd": 2,
+        "k_pos": 0.03
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "EKF-Ctrl",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "kp": 20,
+        "kd": 10
+      }
+    },
+    {
+      "plant": "msd",
+      "method": "Speed-Gradient",
+      "before": "unstable",
+      "after": "poor",
+      "params": {
+        "gamma_sg": 2,
+        "q_weight": 0.1
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "P",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "kp": 10
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "PI",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "kp": 15,
+        "ki": 2.5
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "IncPID",
+      "before": "unstable",
+      "after": "saturated",
+      "params": {
+        "kp": 18,
+        "ki": 0.9,
+        "kd": 9
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "ISMC",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "c1": 0.5,
+        "c2": 0.5,
+        "k_gain": 2
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "TSMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "beta": 1.3,
+        "k_gain": 4
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "FTSMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "c1": 0.4,
+        "c2": 0.2,
+        "k_gain": 2
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "ASMC",
+      "before": "saturated",
+      "after": "fair",
+      "params": {
+        "c_surface": 2.5,
+        "gamma": 25
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "STR",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "gamma": 9,
+        "wn": 3.6
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "ESC",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "k_esc": 5
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "BELBIC",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "a_A": 1,
+        "a_O": 0.5,
+        "w_e": 0.2,
+        "w_v": 0.1
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "ESO-SMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "w_o": 15,
+        "c_surface": 2.5,
+        "k_gain": 5,
+        "b0": 0.25
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "T-DOB",
+      "before": "saturated",
+      "after": "fair",
+      "params": {
+        "kp": 10,
+        "kd": 5
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "Posicast",
+      "before": "poor",
+      "after": "fair",
+      "params": {
+        "kp": 4,
+        "kd": 2,
+        "k_pos": 0.03
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "FuzzyPID",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "kp0": 8,
+        "ki0": 1.3,
+        "kd0": 3.8
+      }
+    },
+    {
+      "plant": "freeMass",
+      "method": "Speed-Gradient",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "gamma_sg": 10,
+        "q_weight": 0.5
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "LQG",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "q_x": 50,
+        "q_v": 5,
+        "r_w": 0.5
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "H-Infinity",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "gamma": 1.1,
+        "q_x": 50
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "SMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "c_surface": 2.5,
+        "k_gain": 5
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "ISMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "c1": 1.3,
+        "c2": 1.3,
+        "k_gain": 5
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "TSMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "beta": 0.5,
+        "k_gain": 2
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "FTSMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "c1": 0.4,
+        "c2": 0.2,
+        "k_gain": 2
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "ASMC",
+      "before": "saturated",
+      "after": "good",
+      "params": {
+        "c_surface": 0.5,
+        "gamma": 5
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "MRAC",
+      "before": "unstable",
+      "after": "good",
+      "params": {
+        "gamma": 18,
+        "wn": 3.6
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "Linear-Actor-Critic",
+      "before": "unstable",
+      "after": "good",
+      "params": {
+        "alpha_c": 3.6,
+        "alpha_a": 9,
+        "gamma_rl": 0.99
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "Gradient-PID",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "gamma_p": 0.9,
+        "gamma_d": 0.18,
+        "kp0": 18
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "ADRC",
+      "before": "saturated",
+      "after": "good",
+      "params": {
+        "w_o": 15,
+        "w_c": 5,
+        "b0": 0.25
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "NL-ADRC",
+      "before": "unstable",
+      "after": "saturated",
+      "params": {
+        "w_o": 15,
+        "w_c": 5,
+        "b0": 0.25
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "ESO-SMC",
+      "before": "fair",
+      "after": "good",
+      "params": {
+        "w_o": 15,
+        "c_surface": 2.5,
+        "k_gain": 5,
+        "b0": 0.25
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "ILC",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "gamma_ilc": 1.8,
+        "kp_base": 18
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "EKF-Ctrl",
+      "before": "unstable",
+      "after": "fair",
+      "params": {
+        "kp": 20,
+        "kd": 10
+      }
+    },
+    {
+      "plant": "pendulum",
+      "method": "Neural-RBF-ADRC",
+      "before": "saturated",
+      "after": "good",
+      "params": {
+        "wo": 15,
+        "wc": 5,
+        "n_lr": 2.5,
+        "b0": 0.25
+      }
+    }
+  ]
+}

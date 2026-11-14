@@ -1,0 +1,13 @@
+# 依赖与构建产物（本项目零依赖，列出以防误提交）
+node_modules/
+.netlify/
+.cache/
+
+# 开发期临时产物
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# 浏览器验收截图（verify-file-protocol.js 的运行产物，非源码）
+screenshots/
