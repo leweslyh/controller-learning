@@ -10,13 +10,32 @@
   const doc = global.document;
   const $ = (id) => doc.getElementById(id);
 
+  /* 会画出辅助参考流形（alg.ref_display）的方法清单：
+     与 simulation.js 中实际写 ref_display 的 case 一一对应 */
   const REF_FLOW_METHODS = [
-    'MRAC', 'L1', 'Flatness', 'InputShaping', 'PPC', 'PTC', 'ESO-Follow',
-    'MRAC-MIT', 'Topological', 'Posicast', 'Funnel', 'TimeVary-BLF', 'Lorenz-Coupled'
+    'MRAC', 'MRAC-MIT', 'Composite-MRAC', 'L1', 'Flatness-Trajectory-Track',
+    'InputShaping', 'Posicast', 'PPC', 'Funnel-Control', 'TimeVary-BLF',
+    'RampSP-PID', 'TubeMPC', 'DMC-DynamicMatrix', 'Lorenz-Coupled'
   ];
 
   /* 理论体系章节号：与参考站点的中文数字编号保持一致 */
   const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+
+  /* 速度滑块用对数刻度：前半程 0.1×→1×，后半程 1×→10×，低倍速可精细调节 */
+  const SPEED_MIN = 0.1, SPEED_MAX = 10, SPEED_STEPS = 1000;
+  function speedFromSlider(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 1;
+    const p = Math.max(0, Math.min(1, n / SPEED_STEPS));
+    return Math.round(SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, p) * 100) / 100;
+  }
+  function sliderFromSpeed(speed) {
+    const s = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Number(speed) || 1));
+    return Math.round(Math.log(s / SPEED_MIN) / Math.log(SPEED_MAX / SPEED_MIN) * SPEED_STEPS);
+  }
+  function formatSpeed(speed) {
+    return String(Math.round((Number(speed) || 1) * 100) / 100) + '×';
+  }
 
   let cb = {};
   let scope = 'all';
@@ -28,6 +47,8 @@
   let lastFocus = null;
   let toastTimer = null;
   let exportMenu = null;
+  /* 已经求解过最优增益的方法：用于决定「求解原理 · 教学文档」入口是否露出 */
+  const solvedGainMethods = Object.create(null);
 
   function esc(value) {
     return String(value === undefined || value === null ? '' : value)
@@ -455,7 +476,7 @@
         'title="在新标签打开原文链接（离线环境下不会自动请求）">' + icon('external') + '查看原文</a>'
       : '<span class="paper-link is-disabled">暂无可用链接</span>';
     /* 默认折叠：收起态仍可读「原论文 · SOURCE」标签与核验状态徽章；
-       展开后才铺开题名 / 作者 / 出处 / 核验说明 / 原文链接。
+       展开后只铺题名 / 作者 / 出处 / 原文链接，不再重复核验说明。
        .fold-box 必须是 summary 的直接子元素，以复用统一的旋转/反白样式。 */
     return '<details class="paper-card" aria-label="本方法的原论文出处">' +
       '<summary class="paper-head">' +
@@ -467,7 +488,6 @@
         '<p class="paper-title">' + esc(p.title) + '</p>' +
         '<p class="paper-authors">' + esc(p.authors || '作者未标注') + '</p>' +
         '<p class="paper-journal">' + esc(p.journal || '出处未标注') + '</p>' +
-        (v.reason ? '<p class="paper-reason">核验说明：' + esc(v.reason) + '</p>' : '') +
         '<div class="paper-foot">' + link + '</div>' +
       '</div>' +
       '</details>';
@@ -493,7 +513,11 @@
     const warn = fit[current] === 'unfit'
       ? '<p class="fit-warn">该对象下默认参数不收敛：建议按徽章切换到推荐对象，或先降低增益并增加阻尼。</p>'
       : '';
-    return '<div class="fit-row"><span class="fit-label">适用对象</span>' + chips + '</div>' + warn;
+    /* 姿态对象无审计数据：如实说明覆盖范围，并按同构关系指引参照对象，不编造评级 */
+    const attitudeNote = ['freeMass', 'msd', 'pendulum'].indexOf(current) < 0
+      ? '<p class="track-hint fit-note">适用性评级仅覆盖经典三对象。姿态通道与二阶模型同构：飞机≈弹簧对象、导弹≈倒立摆、四旋翼≈积分器，可参照对应徽章并以实测为准。</p>'
+      : '';
+    return '<div class="fit-row"><span class="fit-label">适用对象</span>' + chips + '</div>' + warn + attitudeNote;
   }
 
   /* 控制律宽度自适应：宁可缩小字号，也不把公式折成两行。
@@ -733,14 +757,24 @@
         if (value === undefined) value = 0;
         return paramRow(item, item.store, value);
       }).join('');
-      const hint = section.id === 'plant' ? plant.desc : section.hint;
+      /* 增益组顶部：一键最优增益求解（移植自 index(14).html）
+         求解成功后在同一行补一个直达原理文档的入口，未求解时不占位 */
+      const solveRow = section.id === 'gains'
+        ? '<div class="solve-row">' +
+          '<button type="button" class="btn btn-primary solve-btn" id="btn-solve-optimal">' +
+          icon('spark') + '一键最优增益求解</button>' +
+          '<button type="button" class="btn btn-ghost solve-doc-btn" id="btn-solve-doc"' +
+          (solvedGainMethods[settings.method] ? '' : ' hidden') + '>' +
+          icon('book') + '求解原理 · 教学文档</button>' +
+          '</div>'
+        : '';
       html += '<details class="param-group"' + (idx < 2 ? ' open' : '') + '>' +
         '<summary>' +
         '<span class="fold-box">' + icon('chevron') + '</span>' +
         '<span class="param-group-title">' + esc(title) + '</span>' +
-        '<span class="group-count">' + items.length + '</span></summary>' +
-        '<div class="param-body">' + (hint ? '<div class="track-hint">' + NS.math.md(hint) + '</div>' : '') +
-        rows + '</div></details>';
+        '<button type="button" class="group-reset-btn" data-reset-group="' + section.id +
+        '" title="仅恢复本组参数默认值，其他参数保持不变">' + icon('refresh') + '恢复本组</button></summary>' +
+        '<div class="param-body">' + solveRow + rows + '</div></details>';
     });
     host.innerHTML = html;
   }
@@ -776,6 +810,8 @@
     set('m-energy', clean(m.energy || 0, 1));
     set('m-energy-dyn', clean(m.energyDyn || 0, 1));
     set('m-hold', clean(m.holdForce || 0, 2));
+    set('m-os', clean(m.overshoot || 0, 1));
+    set('m-ts', (m.settle === undefined || m.settle === null) ? '—' : Number(m.settle).toFixed(2));
     const pos = $('chart-metric-pos');
     if (pos) pos.textContent = 'RMSE ' + clean(m.rmse * k, dg) + (view && view.deg ? '°' : '') + (m.frozen ? ' · 定格' : '');
     const ctrl = $('chart-metric-ctrl');
@@ -805,14 +841,22 @@
     const track = $('status-track');
     if (track) {
       const a = sim.getActiveTrack();
-      track.textContent = '轨迹 ' + (a ? a.label : 'A') + ' · ' +
-        (info.compare ? 'A/B 对比开启' : (info.frozen ? '波形与指标已定格' : '录制中'));
+      track.textContent = (a ? a.label : 'A') + ' · ' +
+        (info.compare ? 'A/B 对比' : (info.frozen ? '已定格' : '录制中'));
     }
     const compare = $('btn-compare');
     if (compare) compare.setAttribute('aria-pressed', String(!!info.compare));
-    doc.querySelectorAll('.speed-btn').forEach((b) => {
-      b.classList.toggle('is-active', Number(b.dataset.speed) === Number(info.speed));
-    });
+    const speed = Number(info.speed) || 1;
+    const speedSlider = $('speed-slider');
+    if (speedSlider) {
+      const raw = Number(speedSlider.value);
+      if (!Number.isFinite(raw) || Math.abs(speedFromSlider(raw) - speed) > 0.005) {
+        speedSlider.value = String(sliderFromSpeed(speed));
+      }
+      speedSlider.setAttribute('aria-valuetext', formatSpeed(speed));
+    }
+    const speedValue = $('speed-value');
+    if (speedValue) speedValue.textContent = formatSpeed(speed);
   }
 
   function renderLegend() {
@@ -876,13 +920,25 @@
   function renderPresets() {
     const host = $('presets-body');
     if (!host) return;
+    const duelCards = (D.DUELS || []).map((d) => {
+      const na = (D.CONTROLLER_CONFIGS[d.a] || {}).name || d.a;
+      const nb = (D.CONTROLLER_CONFIGS[d.b] || {}).name || d.b;
+      return '<button type="button" class="preset-card duel-card" data-duel="' + esc(d.id) + '">' +
+        '<span class="preset-tag">' + esc(d.tag) + '</span><strong>' + esc(d.label) + '</strong>' +
+        '<p>' + esc(d.desc) + '</p><span class="preset-meta">A: ' + esc(na) + ' · B: ' + esc(nb) + '</span></button>';
+    }).join('');
     host.innerHTML = '<div class="preset-grid">' + D.PRESETS.map((p) => {
       const plantName = p.plant && D.PLANTS[p.plant] ? D.PLANTS[p.plant].name : '二阶积分器';
       return '<button type="button" class="preset-card" data-preset="' + esc(p.id) + '">' +
         '<span class="preset-tag">' + esc(p.tag) + '</span><strong>' + esc(p.title) + '</strong>' +
         '<p>' + esc(p.desc) + '</p><span class="preset-meta">' + esc(D.CONTROLLER_CONFIGS[p.method].name) +
         ' · ' + esc(plantName) + '</span></button>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' +
+      '<h3 class="preset-section-title">经典对决 · 一键双法同屏竞技</h3>' +
+      '<p class="preset-section-note">两种流派各自跑完一段完整闭环（约 3.5 s），曲线以 A / B 双色叠加在同一坐标系里直接比较。</p>' +
+      '<label class="checkline preset-opt"><input type="checkbox" id="duel-optimize">' +
+      ' 对决前各自求解最优增益（更公平，每方法约 0.1–1 s）</label>' +
+      '<div class="preset-grid">' + duelCards + '</div>';
   }
 
   function renderHelp() {
@@ -890,7 +946,10 @@
     if (!host) return;
     const rows = [
       ['空格', '启动 / 暂停仿真'], ['→', '单步推进（暂停时可用）'],
-      ['R', '重置仿真'], ['D', '施加脉冲扰动'],         ['1 / 2 / 4', '切换仿真倍速'],
+      ['R', '重置仿真'], ['D', '施加脉冲扰动'],         ['1 / 2 / 4', '快捷设为 1× / 2× / 4×'],
+      ['仿真速度滑块', '对数刻度 0.1×~10×；点击「仿真速度」恢复默认 1×'],
+      ['O', '一键求解当前方法的最优增益'],
+      ['/', '聚焦左栏方法搜索'],
       ['H', '打开当前方法教学文档'], ['M', '打开被控对象模型与符号参数'],
       ['F', '专注模式（挂起 / 展开两侧栏）'], ['S', '复制实验参数链接'], ['E', '导出 CSV 数据'],
       ['G', '打开符号术语词典'], ['P', '打开场景预设'], ['A', '打开 / 收起智能助手'],
@@ -899,16 +958,18 @@
     host.innerHTML =
       '<section class="help-section"><h3>如何使用</h3><ul>' +
       '<li>左侧按 12 类体系浏览 ' + D.methodList.length + ' 种控制算法，支持关键词搜索、收藏与最近使用。</li>' +
-      '<li>在刚体动画卡片上选择 3 个经典被控对象之一（质量-弹簧-阻尼、二阶积分器、小车-倒立摆），右侧参数自动切换。</li>' +
-      '<li>主舞台的公式条只显示当前对象的动力学方程；点「符号与参数」或按 M，在弹窗里看物理含义、全部符号的当前取值、等效二阶参数与控制输入 u 的施加位置。</li>' +
+      '<li>在刚体动画卡片上选择 6 个被控对象之一（二阶积分器、质量-弹簧-阻尼、小车-倒立摆、飞机俯仰、导弹俯仰、四旋翼滚转），右侧参数自动切换。</li>' +
+      '<li>点「方程与符号」或按 M，在弹窗里看当前对象的动力学方程、物理含义、全部符号的当前取值、等效二阶参数与控制输入的施加位置。</li>' +
       '<li>右侧分组调节控制律增益、目标轨迹、硬件非理想条件与对象参数；控制律公式卡会同步显示本方法的 TeX 方程。</li>' +
-      '<li>中间三张曲线带完整自适应坐标轴（nice 刻度、轴标题与单位），鼠标悬停可读精确数值。</li>' +
-      '<li>开启「A/B 对比」后切换控制器，可把多次实验曲线叠加在同一坐标系中比较。</li></ul></section>' +
+      '<li>中间四张曲线（倒立摆为五张）带完整自适应坐标轴（nice 刻度、轴标题与单位），鼠标悬停可读精确数值；<strong>点击任意曲线卡</strong>可全屏高清放大检视。</li>' +
+      '<li>右侧增益组顶部的<strong>「一键最优增益求解」</strong>（或按 O）会以「理论最优种子 + 多尺度坐标模式搜索」在当前对象与扰动条件下最小化 ITAE + ISE + 超调 + 能耗泛函，自动写回该方法的增益。</li>' +
+      '<li>开启「A/B 对比」后切换控制器，可把多次实验曲线叠加在同一坐标系中比较；场景预设里的<strong>经典对决</strong>可一键让两种流派各跑一段并同屏对比。</li>' +
+      '<li>移动端为精简布局：脉冲扰动、场景预设、对象模型弹窗与仿真指南为桌面端功能。</li></ul></section>' +
       '<section class="help-section"><h3>为什么到达目标后能耗还在增加？</h3><p>' +
       '<strong>累计能耗 ∫u²dt</strong> 统计控制器输出的总能量。在弹簧负载或倒立摆等对象上，稳态时仍需持续的<strong>保持力 uₕ</strong>（例如弹簧对象 uₕ = k·r）来抵消回复力，u² 不为零，因此累计能量会线性增长——这是物理上正确的，但把「维持代价」与「调节代价」混在了一起。' +
       '为此平台同时给出 <strong>动态能耗 ∫(u−uₕ)²dt</strong>，它扣除保持力，收敛后趋于平稳，更适合比较控制器的动态品质；控制力图中的橙色虚线就是 uₕ。' +
       '此外波形定格（主状态误差与速度均低于 0.02、倒立摆还要求小车基本静止、稳定 2 秒，或累计 2500 点）后 RMSE 与两种能耗同步冻结，不再累加；需要继续观察请点状态栏「重新录制」。</p></section>' +
-      '<section class="help-section"><h3>公式格式</h3><p>所有控制律与被控对象方程以标准 TeX 语法存储，由内置轻量渲染器排版（分数、根号、上下标、重音、大运算符），无需联网、无需 KaTeX/MathJax。重音符号由 CSS 绘制，点与字母紧贴；界面不提供公式复制按钮，需要源码可从导出菜单获取公式手册 Markdown。</p></section>' +
+      '<section class="help-section"><h3>公式格式</h3><p>所有控制律与被控对象方程以标准 TeX 语法存储，优先由本地随包 KaTeX 排版（零网络请求），KaTeX 不可用时自动回退到内置 MathML/HTML 轻量渲染器（分数、根号、上下标、重音、大运算符）。需要公式源码可从导出菜单获取公式手册 Markdown。</p></section>' +
       '<section class="help-section"><h3>快捷键</h3><table class="keys-table"><thead><tr><th>按键</th><th>功能</th></tr></thead><tbody>' +
       rows.map((r) => '<tr><td><kbd>' + esc(r[0]) + '</kbd></td><td>' + esc(r[1]) + '</td></tr>').join('') +
       '</tbody></table></section>' +
@@ -918,23 +979,67 @@
       esc(D.APPROXIMATION_NOTE) + '</p></section>';
   }
 
+  /* ── 曲线全屏放大：把指定图表重绘到浮层高分辨率画布 ── */
+  function zoomChart(key, captionEl) {
+    const overlay = $('overlay-zoom');
+    const canvas = $('canvas-zoom');
+    if (!overlay || !canvas || !NS.charts || !NS.charts.drawOne) return;
+    const title = $('zoom-title');
+    if (title) {
+      const raw = captionEl ? captionEl.textContent.replace(/\s+/g, ' ').trim() : '';
+      title.textContent = raw || '波形检视';
+    }
+    openOverlayById('overlay-zoom');
+    /* 等浮层完成布局（画布有真实宽高）后再绘制 */
+    global.requestAnimationFrame(() => {
+      global.requestAnimationFrame(() => NS.charts.drawOne(key, canvas));
+    });
+  }
+
   function openOverlay(id) {
     const el = $(id);
     if (!el) return;
     lastFocus = doc.activeElement;
     el.hidden = false;
+    trapFocus(el);
     const focusable = el.querySelector('button, [href], input, select, [tabindex]:not([tabindex="-1"])');
     if (focusable) focusable.focus();
   }
   function closeOverlay(id) {
     const el = $(id);
     if (!el || el.hidden) return;
+    releaseFocusTrap(el);
     el.hidden = true;
     if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
     lastFocus = null;
   }
+
+  /* ── 焦点陷阱：aria-modal 浮层内 Tab 循环，不逸出到背景页面 ──
+     供 ui/docs/assistant 三处浮层复用；关闭时必须 release。 */
+  const focusTraps = new Map();
+  function trapFocus(el) {
+    if (!el || focusTraps.has(el)) return;
+    const handler = (ev) => {
+      if (ev.key !== 'Tab') return;
+      const items = Array.prototype.filter.call(
+        el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+        (n) => !n.disabled && n.getClientRects().length > 0);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      const active = doc.activeElement;
+      if (ev.shiftKey && (active === first || !el.contains(active))) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && (active === last || !el.contains(active))) { ev.preventDefault(); first.focus(); }
+    };
+    el.addEventListener('keydown', handler);
+    focusTraps.set(el, handler);
+  }
+  function releaseFocusTrap(el) {
+    if (!el) return;
+    const handler = focusTraps.get(el);
+    if (handler) { el.removeEventListener('keydown', handler); focusTraps.delete(el); }
+  }
   function closeAllOverlays() {
-    ['overlay-glossary', 'overlay-presets', 'overlay-help', 'overlay-guide', 'overlay-plant'].forEach(closeOverlay);
+    ['overlay-glossary', 'overlay-presets', 'overlay-help', 'overlay-guide', 'overlay-plant', 'overlay-zoom'].forEach(closeOverlay);
     closeExportMenu();
   }
   function openOverlayById(id) { closeAllOverlays(); openOverlay(id); }
@@ -960,9 +1065,13 @@
   }
 
   /* ── 导出菜单 ─────────────────────────────────────── */
-  function closeExportMenu() { if (exportMenu) { exportMenu.remove(); exportMenu = null; } }
+  function closeExportMenu(restoreFocus) {
+    if (!exportMenu) return;
+    exportMenu.remove(); exportMenu = null;
+    if (restoreFocus) { const anchor = $('btn-export'); if (anchor) anchor.focus(); }
+  }
   function toggleExportMenu() {
-    if (exportMenu) { closeExportMenu(); return; }
+    if (exportMenu) { closeExportMenu(true); return; }
     const anchor = $('btn-export');
     if (!anchor) return;
     const menu = doc.createElement('div');
@@ -980,12 +1089,25 @@
     menu.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-export]');
       if (!btn) return;
-      closeExportMenu();
+      closeExportMenu(true);
       if (btn.dataset.export === 'csv') cb.exportCSV && cb.exportCSV();
       else if (btn.dataset.export === 'png') cb.exportPNG && cb.exportPNG();
       else if (btn.dataset.export === 'papers') cb.exportPapers && cb.exportPapers();
       else if (cb.exportFormulaBook) cb.exportFormulaBook();
     });
+    /* 菜单键盘导航：上下循环 / Home / End / Esc 关闭并还原焦点 */
+    menu.addEventListener('keydown', (ev) => {
+      const items = Array.prototype.slice.call(menu.querySelectorAll('[data-export]'));
+      if (!items.length) return;
+      const idx = items.indexOf(doc.activeElement);
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(idx + 1) % items.length].focus(); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); items[(idx - 1 + items.length) % items.length].focus(); }
+      else if (ev.key === 'Home') { ev.preventDefault(); items[0].focus(); }
+      else if (ev.key === 'End') { ev.preventDefault(); items[items.length - 1].focus(); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeExportMenu(true); }
+    });
+    const first = menu.querySelector('[data-export]');
+    if (first) first.focus();
   }
 
   /* ── 事件绑定（全部转发到编排层） ─────────────────── */
@@ -1037,6 +1159,14 @@
         renderBrowser();
       });
     });
+    /* 左栏关键词搜索：名称 / 键名 / 分类 / 简介均可命中（renderBrowser 内过滤） */
+    const searchBox = $('browser-search');
+    if (searchBox) {
+      searchBox.addEventListener('input', () => {
+        query = searchBox.value || '';
+        renderBrowser();
+      });
+    }
     on('btn-star-filter', 'click', () => {
       starFilter = !starFilter;
       const btn = $('btn-star-filter');
@@ -1060,6 +1190,23 @@
 
     const groups = $('param-groups');
     if (groups) {
+      groups.addEventListener('click', (ev) => {
+        const resetBtn = ev.target.closest('[data-reset-group]');
+        if (resetBtn) {
+          /* 按钮位于 <summary> 内：阻止 details 被顺带折叠/展开 */
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (cb.resetParamGroup) cb.resetParamGroup(resetBtn.dataset.resetGroup);
+          return;
+        }
+        if (ev.target.closest('#btn-solve-optimal')) {
+          if (cb.solveOptimal) cb.solveOptimal();
+          return;
+        }
+        if (ev.target.closest('#btn-solve-doc')) {
+          if (cb.openSolveGuide) cb.openSolveGuide();
+        }
+      });
       groups.addEventListener('input', (ev) => {
         const el = ev.target;
         if (!el.dataset || !el.dataset.key) return;
@@ -1085,19 +1232,47 @@
       });
     }
 
-    const speed = $('speed-group');
-    if (speed) speed.addEventListener('click', (ev) => {
-      const btn = ev.target.closest('[data-speed]');
-      if (btn && cb.setSpeed) cb.setSpeed(Number(btn.dataset.speed));
+    const speed = $('speed-slider');
+    if (speed) speed.addEventListener('input', () => {
+      if (cb.setSpeed) cb.setSpeed(speedFromSlider(speed.value));
+    });
+
+    const speedReset = $('speed-reset');
+    if (speedReset) speedReset.addEventListener('click', () => {
+      if (cb.setSpeed) cb.setSpeed(1);
     });
 
     const presets = $('presets-body');
     if (presets) presets.addEventListener('click', (ev) => {
+      const duelCard = ev.target.closest('[data-duel]');
+      if (duelCard) {
+        const opt = $('duel-optimize');
+        closeOverlay('overlay-presets');
+        if (cb.applyDuel) cb.applyDuel(duelCard.dataset.duel, !!(opt && opt.checked));
+        return;
+      }
       const card = ev.target.closest('[data-preset]');
       if (!card) return;
       closeOverlay('overlay-presets');
       cb.applyPreset && cb.applyPreset(card.dataset.preset);
     });
+
+    /* 曲线卡点击 → 全屏高清放大（移植自 index(14).html 的 zoomedChart 模态框） */
+    const chartsGrid = $('charts-grid');
+    if (chartsGrid) {
+      chartsGrid.addEventListener('click', (ev) => {
+        const card = ev.target.closest('[data-zoom]');
+        if (!card) return;
+        zoomChart(card.dataset.zoom, card.querySelector('figcaption'));
+      });
+      chartsGrid.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        const card = ev.target.closest('[data-zoom]');
+        if (!card) return;
+        ev.preventDefault();
+        zoomChart(card.dataset.zoom, card.querySelector('figcaption'));
+      });
+    }
 
     const profile = $('controller-profile');
     if (profile) profile.addEventListener('click', (ev) => {
@@ -1191,11 +1366,19 @@
     mountColumnSync();
   }
 
+  /* 标记某方法已求解过最优增益，并就地重绘增益卡片（露出原理文档入口） */
+  function markSolved(key) {
+    const k = key || sim.getSettings().method;
+    solvedGainMethods[k] = true;
+    renderParams();
+  }
+
   NS.ui = {
     init, setFavorites, getFavorites, setRecent, setScope, syncColumnHeights,
     setActiveMethod, renderBrowser, renderProfile, renderPlant, renderPlantModel, renderParams,
-    renderLegend, renderTracks, updateMetrics, updateStatus,
+    renderLegend, renderTracks, updateMetrics, updateStatus, markSolved,
     openOverlay, openOverlayById, closeOverlay, closeAllOverlays,
+    trapFocus, releaseFocusTrap,
     setTheme, toast, syncParamControl
   };
 })(window);

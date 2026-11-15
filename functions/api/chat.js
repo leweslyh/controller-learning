@@ -10,7 +10,7 @@
      随每次请求以 apiKey 字段发来；服务端不存储、不记录、不回显。
      未携带时回退环境变量 DEEPSEEK_API_KEY（在 Cloudflare Pages
      后台 Settings → Environment variables 设置）。
-   · 上游超时 30s；对 messages / options 逐项限长与取值校验。
+   · 上游超时：流式 55s / 非流式 30s；对 messages / options 逐项限长与取值校验。
    ============================================================ */
 
 const WINDOW_MS = 60 * 1000;

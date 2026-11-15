@@ -82,7 +82,7 @@
             "LoopShaping-McFarlane": { category: "04. 鲁棒控制与H∞体系", name: "H∞ 回路成型 (McFarlane-Glover)", desc: "先用经典PI/PD将开环传函整形成理想形状，再用互质因子分解最大化鲁棒稳定裕度。", eq: "G_s = W_2 G W_1 , ε_{max} = (1 + ||[K_∞; I](I-G_s K_∞)^{-1}[\\tilde{M}^{-1} \\tilde{N}^{-1}]||_∞)^{-1}", tuning: "W1_gain 决定低频成型斜率，W2_damp 决定高频滚降，完美结合了经典频域直观性与现代H∞鲁棒性。", params: {"w1_gain":[45,10,120,1],"w1_int":[12,0,50,1],"w2_damp":[22,5,60,1]}, detail: "【参数意义】\nW_1(s), W_2(s): 前置与后置频域回路成型加权阵\n\n【底层机理】\n工业界最受欢迎的鲁棒控制方法之一。克服了传统 H∞ 权函数难以选取的痛点：工程师只需像调PID一样给定开环期望形状 W1，随后的归一化左互质因子分解会自动加固系统的相位与幅值裕度。" },
             "Kharitonov-Robust": { category: "04. 鲁棒控制与H∞体系", name: "Kharitonov 区间多项式顶点鲁棒控制", desc: "基于哈里托诺夫四顶点定理，确保质量与刚度在极端区间摄动下依然严格赫尔维茨稳定。", eq: "P(s) ∈ [p_i^-, p_i^+] \\Rightarrow  4个Kharitonov顶点多项式同时稳定", tuning: "随便拉动右侧的系统质量(0.5~10kg)和弹簧刚度！该控制器基于最劣顶点包络设计，全程稳如泰山。", params: {"m_max_bound":[6,2,10,0.5],"wn_rob":[3.2,1,8,0.2],"zeta_rob":[0.9,0.5,1.5,0.05]}, detail: "【参数意义】\nm_{max}: 预设需包络的最大质量摄动上界\n\n【底层机理】\n基于著名的 Kharitonov 定理：一个系数在区间内任意浮动的多项式簇，只需验证 4 个特定构造的极端顶点多项式满足 Routh-Hurwitz 判据，即可从数学上严格保证无穷多个内部参数组合 100% 稳定。" },
             "Corless-Leitmann": { category: "04. 鲁棒控制与H∞体系", name: "Corless-Leitmann 确定性不确定上界控制", desc: "利用李雅普诺夫极小极大(Min-Max)法构造连续饱和非线性项，强行压制有界匹配不确定性。", eq: "u = u_{nom} + ρ(x) · (B^T P e) / (||B^T P e|| + ε_c)", tuning: "Rho_bound 是不确定性包络函数增益，Eps_c 是平滑半径。既有滑模的强抗扰，又保证了全局一致最终有界(UUB)。", params: {"kp_nom":[38,10,100,1],"rho_bound":[25,1,80,1],"eps_c":[0.15,0.01,1,0.01]}, detail: "【参数意义】\nρ(x): 匹配不确定性与外扰的已知范数上界函数\nB^T P e: 李雅普诺夫方向向量\n\n【底层机理】\n确定性鲁棒控制的经典里程碑。无需知道扰动的具体规律，只要知道它的边界包络 ρ(x)，就在李雅普诺夫导数负定方向上施加一个有界非线性反作用力，严格保证状态收敛至任意小的残差球内。" },
-            "Robust-NL-Damping": { category: "04. 鲁棒控制与H∞体系", name: "鲁棒边界非线性阻尼控制 (Nonlinear Damping)", desc: "通过注入与状态偏差深度耦合的非线性阻尼项，保证对有界扰动的L2输入状态稳定(ISS)。", eq: "u = K_{nom} e - (D_{nom} + γ_d(1 + e²)) v + k·r", tuning: "Gamma_d 是非线性抗冲击阻尼系数。遇到突发强力扰动时，阻尼随误差平方剧增，瞬间吸收冲击动能。", params: {"kp_nom":[42,10,100,1],"gamma_d":[8,0,50,0.5]}, detail: "【参数意义】\nγ_d: 为封堵突发未知扰动而强注的非线性冗余阻尼项\n\n【底层机理】\n基于 Sontag 输入-状态稳定(ISS)与配平完成(Completing the Squares)原理：利用高阶非线性阻尼项在李雅普诺夫导数中直接配平外部未知干扰项 d·v，确保无论干扰多猛系统能量都不会发散。" },
+            "Robust-NL-Damping": { category: "04. 鲁棒控制与H∞体系", name: "鲁棒边界非线性阻尼控制 (Nonlinear Damping)", desc: "通过注入与状态偏差深度耦合的非线性阻尼项，保证对有界扰动的L2输入状态稳定(ISS)。", eq: "u = K_{nom} e - (D_{nom} + γ_{rd}(1 + e²)) v + k·r", tuning: "Gamma_rd 是非线性抗冲击阻尼系数。遇到突发强力扰动时，阻尼随误差平方剧增，瞬间吸收冲击动能。", params: {"kp_nom":[42,10,100,1],"gamma_rd":[8,0,50,0.5]}, detail: "【参数意义】\nγ_{rd}: 为封堵突发未知扰动而强注的非线性冗余阻尼项\n\n【底层机理】\n基于 Sontag 输入-状态稳定(ISS)与配平完成(Completing the Squares)原理：利用高阶非线性阻尼项在李雅普诺夫导数中直接配平外部未知干扰项 d·v，确保无论干扰多猛系统能量都不会发散。" },
             "Petersen-GuaranteedCost": { category: "04. 鲁棒控制与H∞体系", name: "保性能鲁棒控制 (Guaranteed Cost Control)", desc: "针对范数有界参数不确定性 ΔA，通过修正黎卡提方程保证二次型性能指标绝不劣于上界 J*。", eq: "(A+B K)^T P + P(A+B K) + ε P D D^T P + ε^{-1} E^T E + Q + K^T R K < 0", tuning: "Eps_gc 为 Petersen 引理尺度参数，Delta_b 为预设的参数不确定性强度。", params: {"q_gc":[130,10,500,10],"eps_gc":[0.8,0.1,5,0.1],"delta_b":[2,0.2,8,0.2]}, detail: "【参数意义】\nε_{gc}: Petersen 不等式消去不确定矩阵 ΔF(t) 的自由度尺度因子\n\n【底层机理】\nChang & Peng 以及 Petersen 提出的保性能控制理论：利用矩阵不等式 2X^T Δ Y ≤ ε X^T X + ε^{-1} Y^T Y 将所有可能的参数摄动包裹进一个确定性黎卡提方程中，给出性能泛函的严格上界保障。" },
             "Passivity-Shortage-Comp": { category: "04. 鲁棒控制与H∞体系", name: "无源性不足度鲁棒补偿 (Passivity-Index)", desc: "量化系统的输入无源度 ν 与输出无源度 ρ，通过前馈并联与负反馈注入填补无源赤字。", eq: "u = -K_{rho} y + v_{ext} , 确保闭环满足无源指数 (ν + ρ_{ctrl} > 0)", tuning: "Rho_pass 注入输出严格无源裕度，Nu_ff 调节前馈通道，对任意无源负载变化保持绝对鲁棒。", params: {"rho_pass":[22,2,60,1],"kp_pass":[42,5,100,1],"ki_pass":[8,0,40,0.5]}, detail: "【参数意义】\nρ_{pass}: 输出严格无源性指数 (Output Strict Passivity Index)\n\n【底层机理】\nBao & Lee 等发展的无源性指数(Passivity Indices)理论：即使被控对象本身因不稳定重力和时延存在“无源性赤字(Passivity Shortage)”，只要控制器的无源盈余大于对象的赤字，闭环系统就依然保持 L2 有限增益稳定。" },
             // === 【5. 模型预测与滚动优化】 ===
@@ -256,6 +256,118 @@
                 });
             }
             return params;
+        };
+
+        /* ── 理论最优种子整定（移植自 index(14).html 的 getTheoreticalOptimalSeed）
+           依据当前被控对象（msd / pendulum）的物理参数 m/c/k 与运行环境，
+           针对 159 种方法逐个推导"理论最优初始参数"，让每个方法都能以接近最优的
+           默认值启动；显式 DEFAULT_OVERRIDES / PLANT_TUNING 仍具有最高优先级。 */
+        const getTheoreticalOptimalSeed = (targetMethod, pP, cfg) => {
+            const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
+            const conf = CONTROLLER_CONFIGS[targetMethod];
+            const defParams = getDefaultParams(targetMethod);
+            if (!conf || !conf.params) return { seed: defParams, ruleName: '解析默认律' };
+
+            const m = pP.m || 2.0;
+            const c = pP.c || 0.5;
+            const k = pP.k || 1.0;
+            const mRatio = m / 2.0;
+            const wn_desired = cfg.plantType === 'pendulum' ? 4.8 : 4.2;
+            const zeta_desired = 1.05; /* 微过阻尼，压超调 */
+            const hasDist = Math.abs(cfg.contDisturbance) > 0.5 || Math.abs(cfg.coulombFriction) > 0.5;
+            const seed = { ...defParams };
+            let ruleName = '极点配置与ITAE泛函联合寻优';
+
+            if (targetMethod === 'LQR' || targetMethod === 'LQG' || targetMethod === 'LQR-Servo-FF' || targetMethod === 'SDRE' || targetMethod === 'Infinite-Horizon-LQ') {
+                ruleName = '连续代数黎卡提方程 (CARE) Butterworth 解析最优律';
+                if ('q_x' in seed) seed.q_x = Math.round(140 * mRatio);
+                if ('q_v' in seed) seed.q_v = Math.round(22 * mRatio);
+                if ('r_w' in seed) seed.r_w = 0.45;
+                if ('q1' in seed) seed.q1 = Math.round(140 * mRatio);
+                if ('q2' in seed) seed.q2 = Math.round(22 * mRatio);
+                if ('r' in seed) seed.r = 0.45;
+            } else if (targetMethod === 'ADRC' || targetMethod === 'NL-ADRC' || targetMethod === 'CasADRC' || targetMethod === 'F-ADRC' || targetMethod === 'ESO-SMC' || targetMethod === 'Nonlinear-Power-ADRC') {
+                ruleName = '高志强带宽参数化法 (ω_o = 3.5ω_c, b_0 = 1/m)';
+                const wc = cfg.plantType === 'pendulum' ? 6.0 : 5.2;
+                if ('wc' in seed) seed.wc = wc;
+                if ('wo' in seed) seed.wo = Math.min(30, Math.round(3.5 * wc));
+                if ('b0' in seed) seed.b0 = Number((1.0 / m).toFixed(2));
+            } else if (targetMethod === 'IMC-PID') {
+                ruleName = 'Rivera-Morari 内模 λ 极点对消整定律';
+                if ('lambda_c' in seed) seed.lambda_c = 0.22;
+                if ('ki_trim' in seed) seed.ki_trim = hasDist ? 1.4 : 0.9;
+            } else if (targetMethod === 'Gain-Margin-PID') {
+                ruleName = 'Åström-Hägglund 无超调继电特征整定律';
+                if ('ku_est' in seed) seed.ku_est = Math.round(115 * mRatio);
+                if ('tu_est' in seed) seed.tu_est = Number((1.15 * Math.sqrt(mRatio)).toFixed(2));
+            } else if (targetMethod === 'SuperTwisting' || targetMethod === 'Levant-HOSMC') {
+                ruleName = 'Levant 二阶滑模有限时间收敛不等式 (λ = 1.5√W)';
+                if ('c' in seed) seed.c = 4.2;
+                if ('w' in seed) seed.w = Math.round(18 * mRatio);
+                if ('lambda' in seed) seed.lambda = Math.round(22 * Math.sqrt(mRatio));
+            } else if (targetMethod === 'SmithPredict' || targetMethod === 'Artstein-Reduction') {
+                ruleName = '内模纯时间滞后精确匹配剥离律 (τ_model = τ_plant)';
+                const actualDelaySec = Math.max(0.05, (cfg.plantDelay || 8) * DT);
+                if ('delay_t' in seed) seed.delay_t = Number(actualDelaySec.toFixed(2));
+                if ('delay_a' in seed) seed.delay_a = Math.max(1, Math.round(cfg.plantDelay || 8));
+                if ('kp' in seed) seed.kp = Math.round(36 * mRatio);
+                if ('kd' in seed) seed.kd = Math.round(18 * Math.sqrt(mRatio));
+            } else if (targetMethod === 'BLF' || targetMethod === 'Asymmetric-BLF' || targetMethod === 'Tan-BLF' || targetMethod === 'PPC' || targetMethod === 'Funnel') {
+                ruleName = 'Tee-Bechlioulis 障碍包络安全裕度整定律 (k_b > |e(0)|)';
+                const initErr = Math.abs((pP.target || 0) - (cfg.initialX || 0)) + 1.8;
+                if ('kb' in seed) seed.kb = Number(Math.max(6.5, initErr * 1.45).toFixed(1));
+                if ('rho_0' in seed) seed.rho_0 = Number(Math.max(8.0, initErr * 1.6).toFixed(1));
+                if ('rho_inf' in seed) seed.rho_inf = 0.2;
+            } else if (targetMethod === 'FeedbackLin' || targetMethod === 'Flatness' || targetMethod === 'Exact-Error-Lin') {
+                ruleName = '精确李导数反馈线性化临界阻尼律 (K_d = 2√K_p)';
+                const kp_fl = 24;
+                if ('kp' in seed) seed.kp = kp_fl;
+                if ('kd' in seed) seed.kd = Number((2.05 * Math.sqrt(kp_fl)).toFixed(1));
+            } else if (conf.category.startsWith('01.')) {
+                ruleName = 'SIMC 三重实极点临界阻尼配置律';
+            } else if (conf.category.startsWith('02.')) {
+                ruleName = 'Bode 最大相位裕度频域超前成形律';
+            } else if (conf.category.startsWith('04.')) {
+                ruleName = 'H∞ 混合灵敏度 Riccati 博弈衰减律';
+            } else if (conf.category.startsWith('05.')) {
+                ruleName = '滚动时域二次规划 (Receding-Horizon QP) 权重平衡律';
+            } else if (conf.category.startsWith('06.')) {
+                ruleName = 'Hurwitz 滑模流形与边界层消振整定律';
+            } else if (conf.category.startsWith('07.')) {
+                ruleName = '标称惯量匹配与 Q-Filter 带宽折衷律';
+            } else if (conf.category.startsWith('08.')) {
+                ruleName = 'CLF 控制李雅普诺夫递推阻尼注入律';
+            } else if (conf.category.startsWith('09.')) {
+                ruleName = 'Lyapunov 归一化自适应率与持续激励整定律';
+            } else if (conf.category.startsWith('10.')) {
+                ruleName = 'Actor-Critic 贝尔曼残差最小化整定律';
+            }
+
+            /* 对通用增益做物理质量 / 阻尼的自适应缩放，并吸附到参数步长 */
+            Object.entries(conf.params).forEach(([pKey, [defV, minV, maxV, stepV]]) => {
+                if (seed[pKey] !== defV) {
+                    const sVal = Math.round(clampN(seed[pKey], minV, maxV) / stepV) * stepV;
+                    seed[pKey] = Number(clampN(sVal, minV, maxV).toFixed(4));
+                    return;
+                }
+                const kl = pKey.toLowerCase();
+                let val = defV;
+                if (kl === 'kp' || kl.startsWith('kp_') || kl === 'k1' || kl === 'kc') {
+                    val = Math.max(defV, m * wn_desired * wn_desired - k);
+                } else if (kl === 'kd' || kl.startsWith('kd_') || kl === 'kv' || kl === 'k2') {
+                    val = Math.max(defV * 0.9, 2 * zeta_desired * m * wn_desired - c);
+                } else if (kl === 'ki' || kl.startsWith('ki_')) {
+                    val = hasDist ? Math.max(defV, 14.0) : defV * 0.6;
+                } else if (kl === 'b0') {
+                    val = 1.0 / m;
+                } else if (kl === 'm_nom' || kl === 'm_est' || kl === 'mn') {
+                    val = m;
+                }
+                const snapped = Math.round(clampN(val, minV, maxV) / stepV) * stepV;
+                seed[pKey] = Number(clampN(snapped, minV, maxV).toFixed(4));
+            });
+
+            return { seed, ruleName };
         };
 
         const fal = (e, a, d) => Math.abs(e) <= d ? e / Math.pow(d, 1 - a) : Math.sign(e) * Math.pow(Math.abs(e), a);
@@ -516,6 +628,13 @@
       "r_u": 0.1
     }
   },
+  "msd": {
+    "P": { "kp": 100 },
+    "PI": { "kp": 40, "ki": 5 },
+    "OpenLoop": { "u_static": 5 },
+    "BangBang": { "force": 60 },
+    "Relay": { "force": 60, "deadzone": 0.05 }
+  },
   "pendulum": {
     "LQR": {
       "q_x": 500,
@@ -604,6 +723,9 @@
     targetMode: 'step', initialX: 0, contDisturbance: 0,
     actuatorLimit: 200, sensorNoise: 0, coulombFriction: 0,
     actuatorDeadzone: 0, plantDelay: 0,
+    /* 倒立摆「摆平衡辅助」：on = 教学稳定模式（内置一层隐藏 PD，任意方法都能稳住摆，
+       与 index(14).html 一致）；off = 真实不稳定摆（拉格朗日动力学，P/PI/开环等会失稳） */
+    balanceAssist: 'on',
     /* 倒立摆进阶：小车位置外环（串级：位置误差 → 期望倾角 → 内环控制器） */
     cartLoop: 'off', cartTarget: 0, cartKp: 0.12, cartKd: 0.3, cartThetaMax: 0.10
   };
@@ -613,48 +735,48 @@
     {
       id: 'pid-baseline', tag: '入门', title: 'PID 整定基线',
       desc: '标准二阶对象的阶跃响应。先提 Kp 看收敛，再加 Kd 压超调，最后补 Ki 消除静差。',
-      method: 'PID', ctrl: {}, phys: { ...DEFAULT_PHYS }, env: { ...DEFAULT_ENV }
+      method: 'PID', plant: 'freeMass', ctrl: {}, phys: { ...DEFAULT_PHYS }, env: { ...DEFAULT_ENV }
     },
     {
       id: 'steady-error', tag: '静差', title: '弹簧负载下的静差挑战',
       desc: '把弹簧刚度调到 4 N/m 后，P 控制会留下明显的稳态误差；切到 PI / LQR-I 观察积分如何消除静差。',
-      method: 'P', plantParams: { k: 4.0 }, ctrl: {}, phys: { ...DEFAULT_PHYS, target: 5.0 },
+      method: 'P', plant: 'msd', plantParams: { k: 4.0 }, ctrl: {}, phys: { ...DEFAULT_PHYS, target: 5.0 },
       env: { ...DEFAULT_ENV, targetMode: 'step' }
     },
     {
       id: 'disturbance', tag: '抗扰', title: '恒定风扰 + 脉冲冲击',
       desc: '持续 25 N 风扰叠加可手动触发的脉冲扰动，检验滑模、ADRC 与 DOB 的鲁棒性。',
-      method: 'SMC', ctrl: {}, phys: { ...DEFAULT_PHYS },
+      method: 'SMC', plant: 'freeMass', ctrl: {}, phys: { ...DEFAULT_PHYS },
       env: { ...DEFAULT_ENV, contDisturbance: 25, actuatorLimit: 150 }
     },
     {
       id: 'noisy-sensor', tag: '噪声', title: '含噪传感器与状态估计',
       desc: '注入高斯测量噪声，比较 LQG / 卡尔曼 / 粒子滤波类方法对微分抖振的抑制。',
-      method: 'LQG', ctrl: {}, phys: { ...DEFAULT_PHYS },
+      method: 'LQG', plant: 'freeMass', ctrl: {}, phys: { ...DEFAULT_PHYS },
       env: { ...DEFAULT_ENV, sensorNoise: 0.2 }
     },
     {
       id: 'weak-actuator', tag: '约束', title: '弱执行器与纯滞后',
       desc: '限幅 60 N、死区 5 N、0.2 s 纯滞后，观察积分饱和与相位裕度问题。',
-      method: 'PID', ctrl: { ki: 20 }, phys: { ...DEFAULT_PHYS },
+      method: 'PID', plant: 'freeMass', ctrl: { ki: 20 }, phys: { ...DEFAULT_PHYS },
       env: { ...DEFAULT_ENV, actuatorLimit: 60, actuatorDeadzone: 5, plantDelay: 10 }
     },
     {
       id: 'tracking', tag: '跟踪', title: '正弦轨迹跟踪',
       desc: '改用正弦指令，观察相位滞后；可切到预见控制、输入整形或重复控制比较。',
-      method: 'PID', ctrl: {}, phys: { ...DEFAULT_PHYS },
+      method: 'PID', plant: 'freeMass', ctrl: {}, phys: { ...DEFAULT_PHYS },
       env: { ...DEFAULT_ENV, targetMode: 'sine' }
     },
     {
       id: 'finite-time', tag: '前沿', title: '有限/预设时间收敛',
       desc: '预设时间控制 PTC 与终端滑模类方法的收敛时间边界，适合观察近端增益爆发。',
-      method: 'PTC', ctrl: {}, phys: { ...DEFAULT_PHYS },
+      method: 'PTC', plant: 'freeMass', ctrl: {}, phys: { ...DEFAULT_PHYS },
       env: { ...DEFAULT_ENV }
     },
     {
       id: 'adrc', tag: '自抗扰', title: 'ADRC 总扰动对消',
       desc: '在库仑摩擦、恒定风扰与测量噪声并存的条件下，观察扩张状态观测器的补偿能力。',
-      method: 'ADRC', ctrl: {}, phys: { ...DEFAULT_PHYS },
+      method: 'ADRC', plant: 'freeMass', ctrl: {}, phys: { ...DEFAULT_PHYS },
       env: { ...DEFAULT_ENV, contDisturbance: 20, coulombFriction: 4, sensorNoise: 0.05 }
     },
     {
@@ -773,7 +895,7 @@
     r_d0: '基底阻尼 R0', r_d1: '非线性阻尼 R1', t_pred_mpc: 'MPC 预测视野',
     k_anc: '辅助镇定增益', q_weight: '状态惩罚权重', ny: '预测视野 Ny',
     nu: '控制视野 Nu', lam: 'GPC 控制权重', rls_lambda: 'RLS 遗忘因子',
-    w_bw: '闭环带宽', kp_nom: '名义比例增益', gamma_d: '鲁棒阻尼注入',
+    w_bw: '闭环带宽', kp_nom: '名义比例增益', gamma_rd: '鲁棒阻尼注入',
     l_obs: '观测器增益 L', l_gain: '观测器增益 L', q_cov: '过程噪声协方差 Q',
     r_cov: '测量噪声协方差 R', p_num: '粒子数量', l1: '精确微分器 L1',
     l2: '精确微分器 L2', delay_a: '网络迟延拍数', q_step: '量化阶梯宽度',
@@ -811,6 +933,7 @@
       id: 'cart', title: '小车位置闭环（进阶）', source: 'env',
       hint: '',
       items: [
+        { key: 'balanceAssist', label: '摆平衡辅助', type: 'select', options: [{ value: 'on', label: '开启（教学稳定：所有方法都能稳摆）' }, { value: 'off', label: '关闭（真实不稳定摆，P/PI/开环会失稳）' }] },
         { key: 'cartLoop', label: '位置闭环', type: 'select', options: [{ value: 'off', label: '关闭（仅镇定摆角）' }, { value: 'on', label: '开启（串级：位置→倾角）' }] },
         { key: 'cartTarget', label: '小车目标位置 x_ref', unit: 'm', min: -3, max: 3, step: 0.1 },
         { key: 'cartKp', label: '外环比例 Kx', unit: 'rad/m', min: 0.05, max: 2, step: 0.05 },
@@ -857,14 +980,14 @@
     msd: {
       id: 'msd', name: '质量-弹簧-阻尼', short: '二阶线性 · 稳定', category: '机械平移', order: 2,
       tex: 'm\\ddot{x}+c\\dot{x}+kx=u', inputSymbol: 'u', inputUnit: 'N',
-      desc: '',
+      desc: '最经典的二阶机械对象：质量块 $m$ 连着弹簧（刚度 $k$）与阻尼器（黏性系数 $c$），控制力 $u$ 直接作用在质量块上。弹簧回复力 $kx$ 总把质量块往原点拉，因此停在非零目标需要持续的保持力 $u_h=k\\cdot r$——这正是「累计能耗」与「动态能耗」两种口径差异的来源。',
       unit: 'm', vUnit: 'm/s', defaultTarget: 5, defaultInitialX: 0, defaultActuatorLimit: 200,
       params: [
         { key: 'm', label: '质量 m', unit: 'kg', min: 0.5, max: 10, step: 0.1 },
         { key: 'c', label: '黏性阻尼 c', unit: '', min: 0, max: 5, step: 0.1 },
         { key: 'k', label: '弹簧刚度 k', unit: 'N/m', min: 0, max: 10, step: 0.5 }
       ],
-      defaults: { m: 2.0, c: 0.5, k: 1.0 },
+      defaults: { m: 2.0, c: 1.5, k: 1.0 },
       effective: (p) => ({ m: p.m, c: p.c, k: p.k }),
       accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v - p.k * s.x) / p.m,
       holdForce: (target, p) => p.k * target,
@@ -873,7 +996,7 @@
     freeMass: {
       id: 'freeMass', name: '二阶积分器', short: '二阶 · 无回复力', category: '机械平移', order: 2,
       tex: 'm\\ddot{x}=u', inputSymbol: 'u', inputUnit: 'N',
-      desc: '',
+      desc: '没有弹簧、没有阻尼的自由质点：位置是控制力 $u$ 的二重积分，故称二阶积分器。撤掉控制力后速度不会衰减，纯 P 控制只会等幅振荡，必须靠微分（D）注入「电子阻尼」才能收敛。它是检验控制律结构最干净的试金石，也是姿态通道的等效模型。',
       unit: 'm', vUnit: 'm/s', defaultTarget: 5, defaultInitialX: 0, defaultActuatorLimit: 200,
       params: [
         { key: 'm', label: '质量 m', unit: 'kg', min: 0.5, max: 10, step: 0.1 }
@@ -886,8 +1009,8 @@
     },
     pendulum: {
       id: 'pendulum', name: '倒立摆（小车-摆）', short: '二阶 · 开环不稳定', category: '欠驱动系统', order: 2,
-      tex: '\\ddot{\\theta}=\\frac{(M+m)g}{M l}\\theta-\\frac{c}{M l}\\dot{\\theta}-\\frac{1}{M l}F',
-      desc: '',
+      tex: '\\ddot{\\theta}=\\frac{(M+m)g}{M l}\\theta-\\frac{c}{M l}\\dot{\\theta}+\\frac{1}{M l}F',
+      desc: '小车托着一根竖直向上的摆杆：重力不是把它拉回竖直，而是把任何微小偏离越推越大——开环极点在右半平面，不控必倒。控制量是作用在小车上的水平推力 $F$，通过小车移动「间接」扶正摆杆，摆杆转动与小车平动联立积分。目标角非零时不存在静止平衡点，维持倾角需要持续的小车加速度。',
       unit: 'rad', vUnit: 'rad/s', inputSymbol: 'F', inputUnit: 'N',
       defaultTarget: 0, defaultInitialX: 0.15, defaultActuatorLimit: 200,
       params: [
@@ -966,7 +1089,7 @@
       teaching: {
         title: '进阶 · 把右半平面极点拉回来',
         body: '画面是**侧视图**：弹体绕质心（画布中心的黑点）转动，抬头为正。默认参数下 $k=-2$、$J=1.2$，开环极点在 $s=+1.29$ 处：初始偏 3.4° 时，即使目标角就是 0，**不控也必然翻**。\n\n' +
-          '切到「开环前馈」按启动，看它如何倒下；再切 PID / 状态反馈 / 滑模，观察 $K_p |k|$ 时闭环极点被拉回左半平面。把 $k$ 慢慢调向 0，你能找到稳定性的临界点——这正是 $K_p>|k|$ 这条判据的可视化。'
+          '切到「开环前馈」按启动，看它如何倒下；再切 PID / 状态反馈 / 滑模，观察 $K_p>|k|$ 时闭环极点被拉回左半平面。把 $k$ 慢慢调向 0，你能找到稳定性的临界点——这正是 $K_p>|k|$ 这条判据的可视化。'
       }
     },
     uav: {
@@ -1006,6 +1129,21 @@
     missile: { kind: 'attitude', glyph: 'missile', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
     uav: { kind: 'attitude', glyph: 'uav', symbol: 'φ', stateName: '滚转角', rateName: '滚转角速度', rateSymbol: 'ω', min: -0.8, max: 0.8, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 }
   };
+  /* 经典对决预设（移植自 index(14).html 的 PRESET_COMPARISONS）：
+     一次性把两种流派各跑一段完整闭环，曲线叠加在同一坐标系里做公平比较。 */
+  const DUELS = [
+    { id: 'pid-vs-adrc', label: 'PID vs ADRC', tag: '抗扰对决', a: 'PID', b: 'ADRC', desc: '同一恒定风扰下，比较积分反馈与扩张状态观测器的扰动对消速度。' },
+    { id: 'p-vs-pd', label: 'P vs PD', tag: '电子阻尼', a: 'P', b: 'PD', desc: '没有 D 项的系统会长时间来回摆动；加上 K_d 相当于给对象注入虚拟阻尼。' },
+    { id: 'pid-vs-ipd', label: 'PID vs I-PD', tag: '防超调', a: 'PID', b: 'IPD', desc: '微分先行结构把微分作用只留在反馈通道，指令阶跃不再被 D 项放大成冲击。' },
+    { id: 'smc-vs-supertwisting', label: 'SMC vs 超螺旋', tag: '消抖振', a: 'SMC', b: 'SuperTwisting', desc: '一阶滑模靠高频切换硬顶扰动（抖振大），二阶超螺旋用连续项+积分项兼顾精度与平滑。' },
+    { id: 'lqr-vs-lqr-i', label: 'LQR vs LQR-I', tag: '消除静差', a: 'LQR', b: 'LQR-I', desc: 'LQR 在弹簧负载下留静差；LQR-I 增加误差积分状态后把静差磨平。' },
+    { id: 'mpc-vs-tubempc', label: 'MPC vs Tube-MPC', tag: '鲁棒预测', a: 'MPC', b: 'TubeMPC', desc: '名义 MPC 假设未来无扰；Tube-MPC 用辅助镇定增益把状态锁在不变管里。' },
+    { id: 'bangbang-vs-timeoptimal', label: 'Bang-Bang vs 时间最优', tag: '相平面', a: 'BangBang', b: 'TimeOptimal', desc: '开关型硬控与相平面开关曲线：后者能显著减少切换次数与残余振荡。' },
+    { id: 'pid-vs-fuzzypid', label: 'PID vs 模糊自整定', tag: '增益调度', a: 'PID', b: 'FuzzyPID', desc: '模糊规则按误差与误差变化率在线修正增益，大偏差区更激进、近端更柔和。' },
+    { id: 'openloop-vs-inputshaping', label: '开环 vs 输入整形', tag: '残余振动', a: 'OpenLoop', b: 'InputShaping', desc: '同一开环指令，经 ZV 整形器拆分脉冲后能压掉弹簧对象的残余振动。' },
+    { id: 'ppc-vs-blf', label: 'PPC vs BLF', tag: '约束对比', a: 'PPC', b: 'BLF', desc: '预设性能漏斗与障碍李雅普诺夫函数都保证误差不越界，惩罚形式不同。' }
+  ];
+
   /* 对象显示顺序：默认对象「二阶积分器」排在首位；姿态通道对象排在最后 */
   const PLANT_LIST = ['freeMass', 'msd', 'pendulum', 'aircraft', 'missile', 'uav'];
   function plantDefaults() {
@@ -1016,9 +1154,9 @@
 
   NS.data = {
     DT, INITIAL_PARAMS, DICTIONARY_DATA, CONTROLLER_CONFIGS,
-    getDefaultParams, SLIDING_META, SLIDING_MODES, fal, gaussNoise, calcGLWeights, getMembership,
+    getDefaultParams, getTheoreticalOptimalSeed, SLIDING_META, SLIDING_MODES, fal, gaussNoise, calcGLWeights, getMembership,
     groupedMethods, sortedCategories, methodList,
-    DEFAULT_ENV, DEFAULT_PHYS, PRESETS, DEFAULT_OVERRIDES, PLANT_TUNING,
+    DEFAULT_ENV, DEFAULT_PHYS, PRESETS, DUELS, DEFAULT_OVERRIDES, PLANT_TUNING,
     PARAM_LABELS, PARAM_UNITS, PARAM_SECTIONS, TARGET_MODE_OPTIONS,
     GRAVITY, PLANTS, PLANT_LIST, PLANT_VIEWS, plantDefaults,
     isApproximation, APPROXIMATION_NOTE

@@ -51,8 +51,9 @@
   function markDirty() { dirty = true; }
   function consumeDirty() { const d = dirty; dirty = false; return d; }
 
-            const resetAlgState = (methodName, currTarget = 5.0) => {
-                stateRef.current.alg = {
+            /* 构造一份全新的算法内部状态（纯函数）：resetSim 用它重置真实通道，
+               最优增益求解器用它为每个候选参数生成互不污染的影子通道。 */
+            const makeAlgState = (currTarget = 5.0) => ({
                     integral: 0, e_prev: 0, e_prev2: 0, u_prev: 0, u_prev2: 0, x_prev: 0, v_prev: 0,
                     d_hat: 0, st_int: 0, z1: 0, z2: 0, z3: 0, xm: 0, vm: 0, theta_r: 0, theta_x: 0, theta_v: 0, 
                     u_l1_filter: 0, w1: 0.33, w2: 0.33, w3: 0.33, m_hat: 1.0, k_hat: 1.0, c_hat: 0.5, 
@@ -84,7 +85,10 @@
                     spsa_j_prev: 0,
                     u_lag_prev: 0,
                     v_inc_prev: 0
-                };
+            });
+
+            const resetAlgState = (methodName, currTarget = 5.0) => {
+                stateRef.current.alg = makeAlgState(currTarget);
             };
 
             /* 滑模切换函数的统一消抖实现：
@@ -498,7 +502,7 @@
                     u = cP.kp_nom * e - 18 * v + u_min_max + pP.k * target; break;
                 }
                     case 'Robust-NL-Damping': {
-                    const robust_d = cP.gamma_d * (1 + e * e);
+                    const robust_d = cP.gamma_rd * (1 + e * e);
                     u = cP.kp_nom * e - (16 + robust_d) * v + pP.k * target; break;
                 }
                     case 'Petersen-GuaranteedCost': {
@@ -1254,6 +1258,29 @@ default: u = 0;
                     state.alg.energy = (state.alg.energy || 0) + Math.pow(u, 2) * DT;
                     state.alg.energy_dyn = (state.alg.energy_dyn || 0) + Math.pow(inputSign * u - holdForce, 2) * DT;
                     state.alg.ticks = (state.alg.ticks || 0) + 1;
+
+                    /* 超调量 σ%（移植自 index(14).html 的 max_overshoot）：
+                       以「起点→目标」的指令幅度为基准，记录越过目标一侧的最大百分比 */
+                    const stepDist = Math.abs(activeTarget - settings.initialX);
+                    if (stepDist > 1e-3) {
+                        const dirSign = activeTarget >= settings.initialX ? 1 : -1;
+                        const over = (state.x - activeTarget) * dirSign;
+                        if (over > 0) {
+                            const pct = (over / stepDist) * 100;
+                            if (pct > (state.alg.max_overshoot || 0)) state.alg.max_overshoot = pct;
+                        }
+                    }
+
+                    /* 调节时间 t_s：误差首次进入 ±2% 指令带（带下限）且速度足够小；
+                       之后若重新越界则作废，取「最后一次进入」的时刻 */
+                    const band = Math.max(0.02 * stepDist, 0.01);
+                    const inBand = Math.abs(activeTarget - state.x) <= band && Math.abs(state.v) <= Math.max(0.05, 0.3 * band);
+                    if (inBand && state.t > 0.2) {
+                        if (state.alg.t_settle === undefined) state.alg.t_settle = state.t;
+                    } else if (!inBand && Math.abs(activeTarget - state.x) > band * 1.6) {
+                        state.alg.t_settle = undefined;
+                    }
+
                     /* 控制输入纹波 σ(u)：均值已扣除，滑动窗口约 0.8 s；稳态时该值越大说明抖振越重 */
                     const alpha = Math.min(1, DT / 0.8);
                     const m1 = state.alg.u_m1 === undefined ? u : state.alg.u_m1 + alpha * (u - state.alg.u_m1);
@@ -1307,12 +1334,34 @@ default: u = 0;
                 if (plant.id === 'pendulum') {
                     /* 摆杆转动与小车平动联立：θ̈、ẍ_c 同时积分，小车会真实移动 */
                     const M = pplant.M, mm = pplant.m, ll = pplant.l, cc = pplant.c;
-                    const thDD = ((M + mm) * D.GRAVITY * state.x - cc * state.v - F_actual) / (M * ll);
-                    const xDD = (F_actual - mm * ll * thDD) / (M + mm);
+                    let thDD;
+                    if (settings.balanceAssist !== 'off') {
+                        /* 摆平衡辅助（默认开启，与 index(14).html 同款「隐藏 PD」）：
+                           摆角由内置 PD 主导稳定，控制力只以 18% 强度经小车加速度弱耦合作用于摆，
+                           使 P/PI/开环乃至对 k<0 不适配的预测类方法都能稳住摆、专注演示各自特性；
+                           关闭后回到真实不稳定拉格朗日动力学。 */
+                        const g = D.GRAVITY;
+                        const fb = Math.min(4.5, Math.max(1.0, Math.abs(F_actual) / (mm * 8.0) + 1.2));
+                        const damp = 3.2 + 0.5 * cc;
+                        thDD = (g / ll) * state.x - (cc * state.v) / (M * ll)
+                             - ((g / ll) * 1.65 * fb * state.x + damp * state.v);
+                    } else {
+                        thDD = ((M + mm) * D.GRAVITY * state.x - cc * state.v - F_actual) / (M * ll);
+                    }
+                    let xDD = (F_actual - mm * ll * thDD) / (M + mm);
+                    if (settings.balanceAssist !== 'off') {
+                        /* 教学简化：小车位置 / 速度软回中，避免「只控摆角」时小车无限漂出画面 */
+                        xDD -= 0.6 * (state.xc || 0) + 1.2 * (state.vc || 0);
+                    }
                     state.v += thDD * DT;
                     state.x += state.v * DT;
                     state.vc = (state.vc || 0) + xDD * DT;
                     state.xc = (state.xc || 0) + state.vc * DT;
+                    if (settings.balanceAssist !== 'off') {
+                        /* 教学简化：小车软边界，个别内模失配方法持续偏置时也不致飞出画面 */
+                        if (state.xc > 8) { state.xc = 8; if (state.vc > 0) state.vc = 0; }
+                        else if (state.xc < -8) { state.xc = -8; if (state.vc < 0) state.vc = 0; }
+                    }
                 } else if (plant.order === 2) {
                     const a = plant.accel(state, u_actual, ext_f, friction_force, pplant);
                     state.v += a * DT;
@@ -1354,6 +1403,186 @@ default: u = 0;
                     }
                 }
             };
+
+  /* ── 影子推演：不污染真实通道 / 曲线 / 指标 ───────────────
+     把 stateRef / historyRef / chartStateRef / impulseRef 临时换成一次性的对象，
+     复用 updatePhysics 里同一套物理积分与控制律，跑完再整体还原。
+     chartStateRef 置成 frozen=false 时记录只会写进一次性数组，天然丢弃。 */
+  function withShadowRollout(method, candParams, steps, visit) {
+    const savedState = stateRef.current;
+    const savedHistory = historyRef.current;
+    const savedChartRef = chartStateRef.current;
+    const savedImpulse = impulseRef.current;
+    const savedLastU = lastU;
+    const savedParams = settings.ctrlParams;
+    const savedMethod = settings.method;
+
+    const shadow = { x: settings.initialX, v: 0, xc: 0, vc: 0, t: 0, alg: {} };
+    stateRef.current = shadow;
+    historyRef.current = [];
+    chartStateRef.current = { frozen: false, freezeTimer: 0 };
+    impulseRef.current = 0;
+    settings.ctrlParams = candParams;
+    settings.method = method;
+    resetAlgState(method, settings.physParams.target);
+
+    try {
+      for (let i = 0; i < steps; i++) {
+        updatePhysics();
+        if (visit) visit(shadow, lastU);
+      }
+    } finally {
+      stateRef.current = savedState;
+      historyRef.current = savedHistory;
+      chartStateRef.current = savedChartRef;
+      impulseRef.current = savedImpulse;
+      lastU = savedLastU;
+      settings.ctrlParams = savedParams;
+      settings.method = savedMethod;
+    }
+    return shadow;
+  }
+
+  /* ── 最优增益求解（移植自 index(14).html 的 computeOptimalGainsForMethod）
+     代价泛函 J = ITAE + ISE + 倒立摆倾角 + 能耗 + 抖振 + 超调/末端残差惩罚；
+     起点取「当前值 / 方法默认值 / 理论最优种子」三者中代价最小者，
+     然后在每个参数的 [min,max] 盒内做多尺度坐标模式搜索（3 轮，逐轮细化）。 */
+  const SOLVE_HORIZON = 200;      /* 4.0 s 完整闭环轨迹 */
+  const SCALE_MULS = [0.35, 0.55, 0.75, 0.88, 1.12, 1.28, 1.55, 1.9, 2.4];
+  const STEP_DELTAS = [-6, -3, -2, -1, 1, 2, 3, 6];
+
+  function costOfTrajectory(method, cand) {
+    const isPend = getPlant().id === 'pendulum';
+    let cost = 0;
+    let uPrev = 0;
+    const shadow = withShadowRollout(method, cand, SOLVE_HORIZON, (st, u) => {
+      const target = plantTargetWave(settings.physParams.target, settings.targetMode, st.t, settings.plantId);
+      const e = target - st.x;
+      const du = u - uPrev;
+      uPrev = u;
+      cost += (1 + 2.8 * st.t) * Math.abs(e) * DT + 3.5 * e * e * DT;
+      /* 倒立摆：state.x 即摆角，额外惩罚倾角与角速度 */
+      if (isPend) cost += 65 * st.x * st.x * DT + 8 * st.v * st.v * DT;
+      cost += 0.0005 * u * u * DT + 0.0018 * du * du * DT;
+    });
+    const overPct = shadow.alg.max_overshoot || 0;
+    const finalErr = Math.abs(settings.physParams.target - shadow.x);
+    const finalVel = Math.abs(shadow.v);
+    cost += 0.45 * overPct * overPct + 45 * finalErr * finalErr + 8 * finalVel * finalVel;
+    return Number.isFinite(cost) ? cost : 1e9;
+  }
+
+  function snapParam(v, minV, maxV, stepV) {
+    const s = Math.max(1e-9, stepV || 0.01);
+    const snapped = Math.round(clamp(v, minV, maxV) / s) * s;
+    return Number(clamp(snapped, minV, maxV).toFixed(4));
+  }
+
+  function optimizeGains(method, startParams) {
+    const target = method || settings.method;
+    const conf = D.CONTROLLER_CONFIGS[target];
+    const start = { ...(startParams || settings.ctrlParams) };
+    if (!conf || !conf.params) return { params: start, improvePct: 0, ruleName: '解析默认律' };
+
+    const plant = getPlant();
+    const pplant = getPlantParams();
+    const eff = plant.effective(pplant);
+    const pP = { ...settings.physParams, m: eff.m, c: eff.c, k: eff.k };
+    const cfg = {
+      plantType: plant.id === 'pendulum' ? 'pendulum' : 'slider',
+      contDisturbance: settings.contDisturbance || 0,
+      coulombFriction: settings.coulombFriction || 0,
+      plantDelay: settings.plantDelay || 0,
+      initialX: settings.initialX || 0
+    };
+
+    /* 候选起点：当前 / 默认 / 理论最优种子 */
+    let best = { ...start };
+    let bestCost = costOfTrajectory(target, best);
+    const initCost = bestCost;
+    let ruleName = '极点配置与ITAE泛函联合寻优';
+
+    const defParams = getDefaultParams(target);
+    const defCost = costOfTrajectory(target, defParams);
+    if (defCost < bestCost) { bestCost = defCost; best = { ...defParams }; }
+
+    const seedRes = D.getTheoreticalOptimalSeed ? D.getTheoreticalOptimalSeed(target, pP, cfg) : null;
+    if (seedRes) {
+      if (seedRes.ruleName) ruleName = seedRes.ruleName;
+      const seedCost = costOfTrajectory(target, seedRes.seed);
+      if (seedCost < bestCost) { bestCost = seedCost; best = { ...seedRes.seed }; }
+    }
+
+    /* 多尺度坐标模式搜索 */
+    const entries = Object.entries(conf.params);
+    for (let round = 0; round < 3; round++) {
+      for (let i = 0; i < entries.length; i++) {
+        const key = entries[i][0];
+        const [defV, minV, maxV, stepV] = entries[i][1];
+        if (!Number.isFinite(best[key]) || typeof best[key] !== 'number') continue;
+        const curr = best[key];
+        const span = maxV - minV;
+        const factor = round === 0 ? 3 : (round === 1 ? 2 : 1);
+        const cands = new Set();
+        const push = (v) => cands.add(snapParam(v, minV, maxV, stepV));
+
+        SCALE_MULS.forEach((mul) => push(curr * mul));
+        STEP_DELTAS.forEach((d) => push(curr + d * factor * stepV));
+        if (round === 0) [0.15, 0.3, 0.5, 0.7, 0.85].forEach((q) => push(minV + q * span));
+        push(defV);
+        push(curr);
+
+        cands.forEach((val) => {
+          if (val === best[key]) return;
+          const trial = { ...best, [key]: val };
+          const c = costOfTrajectory(target, trial);
+          if (c < bestCost) { bestCost = c; best = trial; }
+        });
+      }
+    }
+
+    const improvePct = initCost > 1e-4 ? Math.max(0, (initCost - bestCost) / initCost * 100) : 0;
+    return { params: best, improvePct, cost: bestCost, ruleName };
+  }
+
+  /* ── 快速推演：把若干秒的闭环一次性算完（对决预设 / 自动收敛对比用） ── */
+  function fastForward(seconds) {
+    const n = Math.min(2000, Math.max(1, Math.round((seconds || 1) / DT)));
+    for (let i = 0; i < n; i++) updatePhysics();
+    syncTrack();
+    markDirty();
+  }
+
+  /* ── 经典对决：A 跑完一段 → 清点轨迹 → 切到 B 再跑一段（曲线叠加对比） ──
+     optimize 为 true 时先给每种方法求解一次最优增益，保证「最佳状态下的公平对决」。 */
+  function duelLeg(key, seconds, optimize) {
+    settings.method = key;
+    applyTuning(key);
+    if (optimize) settings.ctrlParams = optimizeGains(key, settings.ctrlParams).params;
+    stateRef.current = { x: settings.initialX, v: 0, xc: 0, vc: 0, t: 0, alg: {} };
+    resetAlgState(key, settings.physParams.target);
+    impulseRef.current = 0;
+    createTrack();
+    fastForward(seconds);
+  }
+
+  function duel(a, b, options) {
+    const opt = options || {};
+    if (!D.CONTROLLER_CONFIGS[a] || !D.CONTROLLER_CONFIGS[b]) return null;
+    const seconds = Math.max(1, Math.min(8, opt.seconds || 3.5));
+    compareMode = true;
+    tracks = [];
+    trackSeq = 0;
+    activeTrack = null;
+    settings.running = false;
+
+    duelLeg(a, seconds, !!opt.optimize);
+    duelLeg(b, seconds, !!opt.optimize);
+
+    settings.running = false;
+    markDirty();
+    return { a, b, tracks: tracks.length };
+  }
 
   /* ── 轨迹管理 ─────────────────────────────────────── */
   function syncTrack() {
@@ -1411,7 +1640,25 @@ default: u = 0;
   }
 
   function applyTuning(method) {
-    const base = getDefaultParams(method);
+    const plant = D.PLANTS[settings.plantId] || D.PLANTS.msd;
+    const pplant = (settings.plantParams && settings.plantParams[plant.id]) || plant.defaults;
+    const eff = (plant.effective && plant.effective(pplant)) || { m: 2, c: 0.5, k: 1 };
+    const pP = { ...settings.physParams, m: eff.m, c: eff.c, k: eff.k };
+    const cfg = {
+      plantType: plant.id === 'pendulum' ? 'pendulum' : 'slider',
+      contDisturbance: settings.contDisturbance || 0,
+      coulombFriction: settings.coulombFriction || 0,
+      plantDelay: settings.plantDelay || 0,
+      initialX: settings.initialX || 0
+    };
+    /* msd / pendulum 走「理论最优种子」：让 159 种方法都拿到适配当前对象的默认参数，
+       与 index(14).html 的 getTheoreticalOptimalSeed 一致；其它对象保持原默认值。 */
+    let base;
+    if ((plant.id === 'msd' || plant.id === 'pendulum') && D.getTheoreticalOptimalSeed) {
+      base = D.getTheoreticalOptimalSeed(method, pP, cfg).seed;
+    } else {
+      base = getDefaultParams(method);
+    }
     const over = (D.DEFAULT_OVERRIDES && D.DEFAULT_OVERRIDES[method]) || {};
     const plantOver = (D.PLANT_TUNING && D.PLANT_TUNING[settings.plantId] && D.PLANT_TUNING[settings.plantId][method]) || {};
     Object.keys(over).forEach((k) => { if (k in base) base[k] = over[k]; });
@@ -1427,10 +1674,50 @@ default: u = 0;
     return true;
   }
 
+  /* 参数合法范围：与 ui.js renderParams 的范围来源完全一致（单一事实源在 data.js），
+     数值输入超界时钳制回界内，避免负质量/负限幅等非法值进入积分器 */
+  function paramRange(key, store) {
+    if (store === 'ctrl') {
+      const conf = CONTROLLER_CONFIGS[settings.method];
+      const p = conf && conf.params && conf.params[key];
+      if (p) return { min: p[1], max: p[2] };
+      const smeta = D.SLIDING_META && D.SLIDING_META[settings.method];
+      const m = smeta && smeta[key];
+      if (m && m.type !== 'select' && typeof m.min === 'number') return { min: m.min, max: m.max };
+      return null;
+    }
+    if (store === 'plant') {
+      const plant = D.PLANTS[settings.plantId];
+      const p = plant && plant.params.find((it) => it.key === key);
+      return p ? { min: p.min, max: p.max } : null;
+    }
+    if (key === 'target' || key === 'initialX') {
+      const view = D.PLANT_VIEWS && D.PLANT_VIEWS[settings.plantId];
+      if (view && typeof view.min === 'number') return { min: view.min, max: view.max };
+    }
+    for (const section of D.PARAM_SECTIONS) {
+      const item = section.items && section.items.find((it) => it.key === key);
+      if (item && typeof item.min === 'number') return { min: item.min, max: item.max };
+    }
+    return null;
+  }
+
   function setParam(key, value, store) {
     /* 只有纯数值字符串才转换；'tanh' / 'on' 这类下拉值必须原样保留 */
-    const numeric = (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))
+    let numeric = (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))
       ? Number(value) : value;
+    /* NaN/Infinity 拒绝（保留旧值）；有限数值按配置范围钳制 */
+    if (typeof numeric === 'number') {
+      if (!Number.isFinite(numeric)) { markDirty(); return getParam(key, store); }
+      const range = paramRange(key, store);
+      if (range) numeric = Math.max(range.min, Math.min(range.max, numeric));
+    } else if (typeof numeric === 'string' && numeric.trim() !== '' && (store === 'ctrl' || store === 'phys' || store === 'plant')) {
+      /* 数值存储收到非数值字符串（如 'abc'）：拒绝，保留旧值；
+         'tanh' / 'on' 等合法下拉值不受影响（ctrl 里的 select 键不在数值配置内，原样放行） */
+      const range = paramRange(key, store);
+      const isNumericKey = store !== 'ctrl' || !!range;
+      if (isNumericKey && !Number.isFinite(Number(numeric))) { markDirty(); return getParam(key, store); }
+    }
     if (store === 'ctrl') {
       settings.ctrlParams[key] = numeric;
     } else if (store === 'phys') {
@@ -1443,10 +1730,20 @@ default: u = 0;
       settings[key] = typeof numeric === 'number' && Number.isFinite(numeric) ? numeric : value;
     }
     markDirty();
+    return numeric;
+  }
+
+  function getParam(key, store) {
+    if (store === 'ctrl') return settings.ctrlParams[key];
+    if (store === 'phys') return settings.physParams[key];
+    if (store === 'plant') {
+      const pp = settings.plantParams[settings.plantId];
+      return pp ? pp[key] : undefined;
+    }
+    return settings[key];
   }
 
   function resetParams() {
-    applyTuning(settings.method);
     settings.physParams = { ...INITIAL_PARAMS };
     Object.assign(settings, DEFAULT_ENV);
     settings.speed = 1;
@@ -1454,7 +1751,35 @@ default: u = 0;
     settings.plantParams[plant.id] = { ...plant.defaults };
     settings.physParams.target = plant.defaultTarget;
     settings.initialX = plant.defaultInitialX || 0;
+    applyTuning(settings.method);
     resetSim(settings.method, settings.physParams.target, settings.initialX);
+  }
+
+  /* 只恢复某一个参数组的默认值（实验参数下各子卡片的「恢复本组」）：
+     增益组走与切方法一致的 applyTuning（理论种子 + 覆盖项）；
+     对象属性组走该对象 defaults；其余按 PARAM_SECTIONS 的 store 从默认环境/物理表取值。 */
+  function resetParamGroup(sectionId) {
+    const section = (D.PARAM_SECTIONS || []).find((s) => s.id === sectionId);
+    if (!section) return false;
+    const plant = getPlant();
+    if (sectionId === 'gains') {
+      applyTuning(settings.method);
+    } else if (sectionId === 'plant') {
+      settings.plantParams[plant.id] = { ...plant.defaults };
+    } else {
+      (section.items || []).forEach((item) => {
+        if (item.store === 'phys') {
+          if (item.key === 'target') settings.physParams.target = plant.defaultTarget;
+          else if (INITIAL_PARAMS[item.key] !== undefined) settings.physParams[item.key] = INITIAL_PARAMS[item.key];
+        } else if (item.key === 'initialX') {
+          settings.initialX = plant.defaultInitialX || 0;
+        } else if (DEFAULT_ENV[item.key] !== undefined) {
+          settings[item.key] = DEFAULT_ENV[item.key];
+        }
+      });
+    }
+    resetSim(settings.method, settings.physParams.target, settings.initialX);
+    return true;
   }
 
   function applyPreset(preset) {
@@ -1467,13 +1792,13 @@ default: u = 0;
     if (!settings.plantParams[pid]) settings.plantParams[pid] = { ...D.PLANTS[pid].defaults };
     if (preset.plantParams) Object.assign(settings.plantParams[pid], preset.plantParams);
     settings.method = preset.method;
+    settings.physParams = { ...DEFAULT_PHYS, ...(preset.phys || {}) };
+    if (!preset.phys || preset.phys.target === undefined) settings.physParams.target = getPlant().defaultTarget;
+    Object.assign(settings, DEFAULT_ENV, preset.env || {});
     applyTuning(preset.method);
     Object.keys(preset.ctrl || {}).forEach((k) => {
       if (k in settings.ctrlParams) settings.ctrlParams[k] = preset.ctrl[k];
     });
-    settings.physParams = { ...DEFAULT_PHYS, ...(preset.phys || {}) };
-    if (!preset.phys || preset.phys.target === undefined) settings.physParams.target = getPlant().defaultTarget;
-    Object.assign(settings, DEFAULT_ENV, preset.env || {});
     resetSim(preset.method, settings.physParams.target, settings.initialX);
     return true;
   }
@@ -1556,6 +1881,8 @@ default: u = 0;
       holdForce: getHoldForce(),
       chatter: Math.sqrt(Math.max(0, (alg.u_m2 || 0) - (alg.u_m1 || 0) * (alg.u_m1 || 0))),
       chatterFreq: alg.sw_rate || 0,
+      overshoot: alg.max_overshoot || 0,
+      settle: alg.t_settle,
       frozen: chartStateRef.current.frozen,
       target: getActiveTarget()
     };
@@ -1563,7 +1890,11 @@ default: u = 0;
 
   function setRunning(value) { settings.running = !!value; markDirty(); }
   function toggleRun() { settings.running = !settings.running; markDirty(); return settings.running; }
-  function setSpeed(value) { settings.speed = Math.max(0.25, Math.min(8, Number(value) || 1)); }
+  function setSpeed(value) {
+    const n = Number(value);
+    const safe = Number.isFinite(n) && n > 0 ? n : 1;
+    settings.speed = Math.round(Math.max(0.1, Math.min(10, safe)) * 100) / 100;
+  }
   function getPlant() { return D.PLANTS[settings.plantId] || D.PLANTS.msd; }
   function getPlantParams() { const p = getPlant(); return settings.plantParams[p.id] || p.defaults; }
   function getHoldForce() { const p = getPlant(); return p.holdForce(getActiveTarget(), getPlantParams()) || 0; }
@@ -1600,7 +1931,8 @@ default: u = 0;
   NS.sim = {
     DT, settings,
     setPlant, getPlant, getPlantParams, getHoldForce,
-    resetSim, setMethod, setParam, resetParams, applyPreset,
+    resetSim, setMethod, setParam, resetParams, resetParamGroup, applyPreset,
+    optimizeGains, fastForward, duel,
     triggerDisturbance, rerecord, advance, stepOnce,
     setRunning, toggleRun, setSpeed, setCompareMode, isCompareMode,
     clearTracks, getTracks, getActiveTrack, getHistory,

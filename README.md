@@ -6,13 +6,29 @@
 
 ## V5.0 本轮改动（Netlify 前后端分离）
 
-V5.0 只做部署架构与鲁棒性改造，前端交互、159 法文档、公式与仿真结果保持不变：
+V5.0 的部署架构轮次只做部署与鲁棒性改造，前端交互、159 法文档、公式与仿真结果保持不变（后续功能回灌见下一节）：
 
 - **后端函数置于 `netlify/functions/` 顶层（关键修复）**：原 `netlify/functions/api/chat.js` 这种嵌套两层布局 Netlify 不识别——它只认 `functions/<name>.js`、`functions/<name>/<name>.js`、`functions/<name>/index.js` 三种模式，嵌套两层会让函数整体不被打包、`/api/*` 全 404。V5.0 已改为 `netlify/functions/chat.js` 等顶层文件，路由仍由 `config.path` 挂到 `/api/*`。
 - **删除与 `config.path` 冲突的 rewrite**：三个函数都用 Functions 2.0 的 `export const config = { path: '/api/…' }` 声明路由；V4.0 的 `[[redirects]] /api/* → /.netlify/functions/:splat` 会把请求重写到函数并未注册的默认路径，导致即使部署成功也 404，V5.0 已移除。
 - **`auto` 模式增加回落**：同源 `/api/chat` 缺失或报错且尚未输出时，自动回落浏览器直连；`file://` 直开仍只走直连。配合 404 专用提示，线上函数没上线时不再无声降级为离线检索。
 - **超时对齐平台上限**：Netlify Functions 同步执行上限 60s，上游流式超时取 55s，前端等待上限同步改 55s（原 120s / 90s 会被平台提前掐断）。
 - **`public/_headers` 补 `/api/*` no-store**：不依赖 `netlify.toml` 的 headers 段，手动部署同样生效。
+- **双平台后端并存**：`netlify/functions/` 为 Netlify Functions 2.0 版（`netlify.toml` 生效目录）；`functions/api/` 为功能等价的 Cloudflare Pages Functions 备选版（按文件路径映射 `/api/*`），两者逻辑同步维护，部署时二选一。
+- **全面审查与完善（本轮）**：修正倒立摆显示方程符号、预设对象锁定、参考流形图例键名；补齐三经典对象物理含义文案；参数输入范围钳制；重建文档索引（0 断链）；补齐左栏关键词搜索与 `/` 快捷键；浮层焦点陷阱、`prefers-reduced-motion`、小字对比度等无障碍改善；新增 `tools/verify-v5.js` 一键验收。
+
+## 本轮功能回灌（对齐 `index (14).html`）
+
+`index (14).html` 里 V5.0 尚未具备的四项能力已全部迁移；其中「理论最优种子」此前已在 `data.js::getTheoreticalOptimalSeed` 落位（切方法时作为默认参数），本轮补上了它的**闭环寻优**那半部分：
+
+- **一键最优增益求解**（`simulation.js::optimizeGains` + 右侧增益组顶部按钮 / 快捷键 `O`）：代价泛函 `J = ITAE + ISE + 倒立摆倾角 + 能耗 + 抖振 + 超调/末端残差惩罚`，起点取「当前 / 方法默认 / 理论最优种子」三者最优，再在每个增益的 `[min,max]` 盒内做 3 轮多尺度坐标模式搜索，结果写回增益滑块并提示所用理论律与指标提升幅度。按钮在卡片内居中、无解释小字；求解成功后才露出「求解原理 · 教学文档」直达入口。全部 159 法实测通过，单法 15–80 ms（最慢 Particle-Filter）。
+  - 影子推演：`withShadowRollout()` 临时替换 `stateRef / historyRef / chartStateRef / impulseRef`，复用同一套 `updatePhysics()` 物理与控制律，跑完整体还原——不污染真实曲线、指标与历史。
+  - **原理文档**：`public/docs/guides/001-最优增益求解原理.md`（9 节：痛点 → 五步流程 → 目标泛函 → 理论种子律 → 多尺度坐标搜索 → 为何不用梯度/遗传 → 实测算例 → 局限 → 用法）由 `tools/build-docs.js` 打包为 `public/js/guides-content.js`，与 159 法文档共用阅读器；阅读器目录新增「★ 专题导读」，支持 `#guide=optimal-gain` 直达。
+- **超调 σ 与调节时间 t_s 指标**：以「起点→目标」指令幅度为基准统计越过目标的最大百分比；`t_s` 取误差进入 ±2% 指令带并保持的时刻。指标卡由 8 张扩为 10 张，**始终一行**，宽度不足时横向拖动（滚动吸附 + 细滚动条）；移动端同步改为横滑。
+- **界面精简**：被控对象属性卡去掉解释性文字；「系统状态观测器」状态条改为「`A · 录制中` / `已定格` / `A/B 对比`」并去掉提示语，保持单行。
+- **实验参数分组复位**：`simulation.js::resetParamGroup` 支持按 `PARAM_SECTIONS` 单组恢复默认（增益组走 `applyTuning`，对象组走 `plant.defaults`，其余按 store 取 `DEFAULT_ENV`/`INITIAL_PARAMS`），各组 summary 右侧显示淡绿迷你胶囊「↺ 恢复本组」，比顶栏白底胶囊「恢复默认」更矮更小且带填充色，形态明显区分；同时去掉参数数量徽章。
+- **原论文卡**：summary 与「参数意义 / 调参指引」折叠块同款（边框、圆角、字号、fold-box），展开后不再重复「核验说明」，「查看原文」按钮居中。
+- **曲线点击全屏放大**：任意曲线卡点击/回车即在高分辨率画布上重绘（`charts.js::drawOne`，同一套坐标轴与图例），Esc 或点遮罩关闭。
+- **经典对决预设**：`data.js::DUELS` 收录 10 组流派对比（PID vs ADRC、SMC vs 超螺旋、LQR vs LQR-I、MPC vs Tube-MPC、PPC vs BLF …），一键让两种方法各跑 3.5 s 并叠加为 A/B 双色轨迹；可勾选「对决前各自求解最优增益」做最佳状态对决。
 
 ## V4.0 本轮改动（2026-11-14）
 
@@ -32,28 +48,23 @@ V5.0 只做部署架构与鲁棒性改造，前端交互、159 法文档、公�
 
 ### 移植与复跑
 
-```bash
-node tools/port-v4.js                    # 从 index (14).html 抽取 159 配置/论文/控制律
-node tools/port-v4-compat.js             # 生成逐条择优决策表
-node tools/port-v4-apply.js all          # 落地 data.js / simulation.js / papers.js
-node tools/port-v4-verify-citations.js   # 引用核验汇总 + 回写状态
-node tools/port-v4-docs.js               # 生成/重排 159 份文档
-node tools/build-docs.js                 # 打包 docs-content.js 与索引
-node tools/build-fit.js                  # 生成 159×3 适用性数据
-node tools/verify.js                     # 全量静态验收
-```
+V4.0 的一次性移植工具（`port-v4*.js` 等）保留在 `../控制理论模拟器V4.0/tools/`，只读取 `../index (14).html` 与 `../控制理论模拟器V3.0/` 两份只读基线，不参与页面运行、不发布。V5.0 本目录 `tools/` 只保留日常需要的脚本：
 
-> 上述 `tools/port-v4-*.js` 为一次性移植工具，只读取 `../index (14).html` 与
-> `../控制理论模拟器V3.0/` 两份只读基线，不参与页面运行、不发布。
+```bash
+node tools/build-docs.js        # 打包 docs-content.js 与文档索引
+node tools/build-fit.js         # 生成 159×3 适用性数据（当前 fit-data.js 与 V4 审计结果一致，无需重跑）
+node tools/verify-v5.js         # 全量静态验收（语法/计数/键名对齐/链接有效性）
+node tools/assistant-server.mjs # 智能助手本地预览服务器（可选）
+```
 
 ---
 
 ## 1. 快速开始
 
 1. 双击 `public/index.html`。**首次进入会展开左侧目录**；此后打开默认收起为贴左边框的简略条，条上竖排 12 章章节号，悬停可弹出该章二级目录直接选方法，点章节号或顶部箭头即可展开，按 `F` 可一键专注画布。
-2. 在刚体卡片上切换被控对象，动画、公式条、单位、参数、指标卡标签、曲线轴标题会一起变化；点公式条右侧「符号与参数」或按 `M`，在弹窗里查看物理含义、全部符号的当前取值与等效二阶参数。
+2. 在刚体卡片上切换被控对象，动画、单位、参数、指标卡标签、曲线轴标题会一起变化；点「方程与符号」或按 `M`，在弹窗里查看动力学方程、物理含义、全部符号的当前取值与等效二阶参数。
 3. 选控制器 → 按 **H** 或点「教学文档」读这一讲的推导与整定流程 → 回实验台调参。
-4. 顶部「启动」，观察动画、8 张指标卡与三张带完整坐标轴的曲线；「扰动」检验抗扰；「A/B 对比」叠加比较。
+4. 顶部「启动」，观察动画、10 张指标卡与四张带完整坐标轴的曲线（倒立摆为五张）；「扰动」检验抗扰；「A/B 对比」叠加比较。左栏搜索框（快捷键 `/`）可按名称/关键词过滤 159 法。
 5. 右栏「控制器档案」与其中的「原论文 · SOURCE」**默认折叠**，点标题栏即可展开；折叠状态不记忆，每次打开或切换方法都回到收起态。智能助手入口在顶部菜单栏。桌面三栏并排时左右侧栏与中间主页面等高。
 
 不需要联网、不需要安装 Node / Python、不需要启动本地服务器。
@@ -110,7 +121,7 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 
 **手动覆盖**：电脑端强制三栏（窄视口横向滚动），平板端为「左栏 + 主区」两栏、右栏落到下方整行，手机端单栏堆叠并限制 430px 居中预览；选择保存在 `ctrlsim.v4.layout`，刷新后保持。
 
-**手机竖屏**：默认只保留中间主界面——左右两栏收起为顶栏菜单里的「控制器目录 / 实验参数」抽屉（遮罩或 `Esc` 关闭）；顶栏按钮收进右上角菜单按钮；主卡片只保留启动 / 单步 / 重置，被控对象缩为「对象」+ 92px 下拉。8 张指标卡、观测器标题栏、图例与轨迹条都压缩为单行，超出时左右滑动；图表画布尺寸保持不变。底部开发信息栏同样固定单行，窄屏左右滑动。
+**手机竖屏**：默认只保留中间主界面——左右两栏收起为顶栏菜单里的「控制器目录 / 实验参数」抽屉（遮罩或 `Esc` 关闭）；顶栏按钮收进右上角菜单按钮；主卡片只保留启动 / 单步 / 重置，被控对象缩为「对象」+ 92px 下拉。10 张指标卡、观测器标题栏、图例与轨迹条都压缩为单行，超出时左右滑动；图表画布尺寸保持不变。底部开发信息栏同样固定单行，窄屏左右滑动。
 
 ---
 
@@ -125,58 +136,48 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 │   ├── js/
 │   │   ├── papers.js          159 条原论文出处 + 核验状态（离线数据）
 │   │   ├── assistant.js       智能助手（RAG / 记忆 / 同源代理，可选）
-│   │   ├── data.js            159 条配置、7 类词典、3 个对象模型与可视化语义
-│   │   ├── math.js            TeX 公式引擎与结构化排版
+│   │   ├── data.js            159 条配置、7 类词典、6 个对象模型与可视化语义
+│   │   ├── math.js            TeX 公式引擎（KaTeX 优先 + MathML/HTML 回退）
 │   │   ├── simulation.js      159 条控制律、对象切换与初始状态、多轨迹、能耗口径
-│   │   ├── charts.js          3 种对象专属动画 + 三张自适应坐标曲线 + 导出
-│   │   ├── ui.js              浏览器、档案、参数、指标、公式条与对象模型弹窗、浮层
-│   │   ├── docs.js            159 法教学文档（完整章节 + 实时极点算例）+ 全屏阅读器
+│   │   ├── charts.js          6 种对象专属动画 + 四张自适应坐标曲线（倒立摆五张）+ 导出
+│   │   ├── ui.js              浏览器、档案、参数、指标、对象模型弹窗、浮层
+│   │   ├── docs.js            159 法教学文档（完整章节 + 实时极点算例）+ 全屏阅读器 + 专题导读
 │   │   ├── docs-content.js    159 份离线文档正文（由 tools/build-docs.js 打包，支持 file:// 双击运行）
+│   │   ├── guides-content.js  专题导读正文（由 tools/build-docs.js 从 docs/guides/*.md 打包）
 │   │   ├── fit-data.js        159×3 适用性数据（由 tools/build-fit.js 生成）
 │   │   ├── rails.js           侧栏挂起 / 展开规则与专注模式
+│   │   ├── layout.js          设备识别与布局切换（自动/电脑/平板/手机）、手机抽屉
+│   │   ├── pad.js             整屏手写批注板
 │   │   └── app.js             编排层：主循环、快捷键、偏好、分享与导出
 │   ├── vendor/katex/          本地 KaTeX（离线可用，无 CDN、无网络请求）
 │   ├── assets/icons.svg       独立图标资源副本（页面使用内联 sprite）
 │   ├── docs/                  离线教学文档（正文唯一来源 = methods/*.md）
 │   │   ├── README.md          分类索引（12 类分组，只有链接与简介）
 │   │   ├── methods/*.md       每法一份完整教学文档，共 159 份
-│   │   ├── 方法适配审计.md     477 组合评级矩阵与不适用原因
+│   │   ├── guides/*.md        专题导读（当前 1 篇：最优增益求解原理）
+│   │   ├── 方法适配审计.md     477 组合评级矩阵与不适用原因（V4 期审计产物）
+│   │   ├── 论文引用核验.md     159 条原论文题录核验报告（V4 期产物）
+│   │   ├── 方法择优融合台账.md  V4.0 控制律逐条择优决策记录（历史产物）
 │   │   ├── 调参建议.json       对象专用参数搜索结果
-│   │   └── 对象调参-freeMass.json  默认对象逐方法增益搜索结果（由 tools/audit-plant.js 输出）
+│   │   └── 对象调参-freeMass.json  默认对象逐方法增益搜索结果
 │   └── _headers               缓存与安全头（随 publish 目录发布，任意静态托管可用）
-├── netlify/functions/         ← 后端（Netlify Functions 2.0，默认扫描顶层文件）
-│   ├── chat.js                /api/chat —— DeepSeek 同源代理（可选）
+├── netlify/functions/         ← 后端（Netlify Functions 2.0，netlify.toml 生效目录）
+│   ├── chat.js                /api/chat —— DeepSeek 同源代理（智能助手调用）
 │   ├── health.js              GET /api/health —— 健康检查与部署自检
-│   ├── share.js               /api/share —— 实验快照存取（内存存储，可换 Blobs）
+│   ├── share.js               /api/share —— 实验快照存取（内存存储，可换 Blobs；前端默认不调用）
 │   └── package.json           {"type":"module"}
-├── tools/assistant-server.mjs  # 智能助手本地预览服务器（可选）
-├── tools/port-v4-*.js         # V4.0 一次性移植与验收工具
-├── tools/                     开发期校验与生成脚本（不参与发布）
-│   ├── build-docs.js          重新生成离线教学文档（原 build-handbook.js）
-│   ├── verify.js              开发期静态验收（仅 Node 内置模块）
-│   ├── verify-file-protocol.js  开发期 file:// 真实浏览器验收
-│   ├── verify-chatter.js      滑模消抖专项验收
-│   ├── audit-methods.js       159×3 默认参数审计
-│   ├── audit-plant.js         单对象 × 全方法的收敛审计与增益搜索（默认对象调参用）
-│   ├── audit-poles.js         文档闭环极点算例 × 真实仿真的一致性验收
-│   ├── audit-docs.js          159 份教学文档质量验收（章节/批注/文风/覆盖率）
-│   ├── audit-formulas.js      全量公式排版审计（159 法控制律 + 3 对象方程 + 159 份文档公式块）
-│   ├── tune-plants.js         对象专用参数搜索
+├── functions/api/             ← 后端备选（Cloudflare Pages Functions，按路径映射 /api/*，与上者逻辑等价）
+├── tools/                     开发期脚本（不参与发布）
+│   ├── build-docs.js          重新生成离线教学文档包与索引
 │   ├── build-fit.js           生成适用性数据与审计报告
-│   ├── insert-plant-section.js  为 159 份文档插入「二、被控对象」专节并同步章节/公式编号（幂等）
-│   ├── fix-sec3-numbers.js    把第 3 章公式编号规整为 3.x 并修正交叉引用（幂等）
-│   ├── _serve.js             本地静态预览服务器（端口 8712，零依赖）
-│   ├── _check.js             文档体检（frontmatter / 章节 / 公式配对 / TeX 命令 / 编号 / 字符损坏）
-│   ├── _test-render.js       在 Node 沙箱加载 data/math/docs 做公式渲染自检
-│   ├── _legacy-docs-data.js  旧版程序化教学数据存档（正文已改用 methods/*.md，仅供回填取材）
-│   ├── _meta.txt             159 条方法的元数据表（||| 分隔），供文档生成脚本读取
-│   └── docs-authoring-guide.md  文档编写规范
+│   ├── verify-v5.js           全量静态验收（仅 Node 内置模块）
+│   └── assistant-server.mjs   智能助手本地预览服务器（可选）
 └── README.md                  本说明
 ```
 
-> **前端 `public/` 与后端 `functions/` 的边界**：`public/` 里**没有任何后端依赖**，整站零构建、零 npm 包、零网络请求——双击 `public/index.html` 即可离线跑完整功能。`functions/` 是可选的后端，目前提供两个 REST 接口（健康检查 / 分享快照），前端默认**不调用**它们；即使不部署 Functions，站点也是完整可用的。
+> **前端 `public/` 与后端的边界**：`public/` 里**没有任何后端依赖**，整站零构建、零 npm 包、零网络请求——双击 `public/index.html` 即可离线跑完整功能。后端是可选的：`/api/chat` 供智能助手联网提问（未部署时自动降级本地检索），`/api/health` 与 `/api/share` 前端默认**不调用**；即使不部署 Functions，站点也是完整可用的。
 
-脚本以经典 `<script>` 按 `data → math → simulation → charts → ui → docs → rails → app` 顺序加载，统一挂载到 `window.CtrlSim`。**不使用 ES module**（Chrome 在 `file://` 下会因 CORS 拦截模块加载）。
+脚本以经典 `<script>` 按 `katex → data → papers → math → docs-content → simulation → charts → fit-data → ui → docs → rails → app → assistant → pad → layout` 顺序加载，统一挂载到 `window.CtrlSim`。**不使用 ES module**（Chrome 在 `file://` 下会因 CORS 拦截模块加载）。
 
 ---
 
@@ -202,7 +203,7 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 - **纸面主体**：`body` 用米纸底 + 28px 极淡网格，顶栏与状态栏用 2px 墨线夹住，品牌标志是 3px 墨边直角方块 + 绿色 soft 底 + 版本 pill（2px 墨边、5px 圆角）。
 - **章节即导航**：左栏 12 类体系做成参考站点式的「章节卡」——中文数字编号（一…十二）+ 标题 + 方法数 + 折叠箭头；展开项编号反白为绿底，未展开时为绿字浅底。教学文档阅读器目录沿用同一编号体系。
 - **层次靠边框粗细与投影区分**：主舞台与被控对象/图表面板用 2px 墨边 + 3px 硬投影；左右栏、指标卡、参数小卡只用 1.5px 柔和线 + 纸面柔光，避免满屏硬边造成噪音。
-- **交互元件统一胶囊**：按钮、搜索框、速度档、分段 tab、标签全部 999px 圆角 + 2px 墨边 + 2px 硬投影，`:active` 时位移 2px 并收掉投影，模拟纸片被按下。
+- **交互元件统一胶囊**：按钮、搜索框、速度滑块、分段 tab、标签全部 999px 圆角 + 2px 墨边 + 2px 硬投影，`:active` 时位移 2px 并收掉投影，模拟纸片被按下。速度滑块采用**对数刻度**：前半程对应 0.1×~1×，后半程 1×~10×，低倍速可精细调节；点击「仿真速度」标签可一键恢复默认 1×。
 - **概览条**：左栏顶部 159 / 12 / 6 三格对应站点首屏的「12 学习模块 · 90 个互动实验」亮点条。
 - **夜间实验室**：`[data-theme="dark"]` 沿用站点深色令牌——纸 `#13171c`、面 `#232a33`、墨 `#eaece8`、绿 `#46b576`，硬投影换成 `#090c0f`。
 - **图表跟随换肤**：canvas 通过 `getComputedStyle` 读取 `--surface-3 / --divider / --curve-*`，切换主题时曲线、网格与坐标轴同步换色，无需重启仿真。
@@ -243,7 +244,12 @@ $env:DEEPSEEK_API_KEY="sk-..."; node tools/assistant-server.mjs
 
 倒立摆采用标准的小车-摆模型：摇摆方程由小车平动方程与摆杆转动方程联立消元得到，θ 从竖直向上量起、**向左倾为正**，因此正推力对应 θ̈ 为正（推右→摆左倾），符号与物理解释自洽。默认 `M=1.0 kg, m=0.2 kg, l=0.8 m, c=0.05`，等效 `k=−(M+m)g` 为负 → 开环不稳定，默认初始偏角 0.15 rad。
 
-主舞台只保留**一条 26px 的大公式条**（`.eqbar`）：左侧是「系统动力学 / 对象名」，中间是居中大公式，右侧是「符号与参数」按钮。原先常驻的「关系式与符号」卡已整块移除，改为按需打开的**对象模型弹窗**（按钮或快捷键 `M`），分四节讲清楚：① 物理含义 ② 符号 / 名称 / 当前值 / 单位 / 可调范围表 ③ 等效二阶形式与 m·c·k 当前值 ④ 控制输入 u 施加在哪（尤其区分倒立摆的「小车水平推力」与「摆轴力矩」）。每个对象通过 `effective(p)` 提供等效 `m/c/k`，供 159 条控制律共用；倒立摆取 `m=Ml, k=−(M+m)g`，与 `accel()` 完全一致（非近似）。
+主舞台不再常驻公式条（V4 的 `.eqbar` 已在 V5 移除，舞台更简洁）：动力学方程集中在按需打开的**对象模型弹窗**（「方程与符号」按钮或快捷键 `M`），分节讲清楚：① 物理含义 ② 符号 / 名称 / 当前值 / 单位 / 可调范围表 ③ 等效二阶形式与 m·c·k 当前值 ④ 控制输入施加在哪（尤其区分倒立摆的「小车水平推力」与「摆轴力矩」）⑤ 对象专属进阶讲解（倒立摆串级 / 姿态通道）。每个对象通过 `effective(p)` 提供等效 `m/c/k`，供 159 条控制律共用；倒立摆取 `m=Ml, k=−(M+m)g`，与 `accel()` 完全一致（非近似）。
+
+**默认参数整定（本轮）**：`msd` 与倒立摆接入移植自 `index(14).html` 的 `getTheoreticalOptimalSeed`——切换对象或方法时，按当前等效 `m/c/k` 与运行环境为 159 种方法逐个推导「理论最优默认参数」，由 `applyTuning()` 自动套用（显式 `DEFAULT_OVERRIDES` / `PLANT_TUNING` 仍具有最高优先级）。
+
+- **质量-弹簧-阻尼**：默认阻尼 `c` 由 0.5 提到 1.5，并为 P / PI / OpenLoop 补专属调参（`kp=100` / `kp=40,ki=5` / `u_static=5`），使这三种原本因欠阻尼或开环而长期振荡 / 停不到目标的方法也能视觉收敛（P 的约 1% 静差是物理必然）。全量 159 法中 **156 法收敛**；剩余 `Relay`（继电极限环）、`Repetitive`（需周期目标）、`Lorenz-Coupled`（混沌）属于方法本质特性，非参数可修。
+- **倒立摆**：新增「摆平衡辅助」开关（参数栏「小车位置闭环（进阶）」分组，默认**开启**）。开启时在摆角动力学里内置一层隐藏 PD（与 `index(14)` 同款），摆角由它主导稳定，使 159 种方法（含 P / PI / 开环）都能稳住摆；关闭则回到真实不稳定拉格朗日动力学（P / PI / 开环重新发散，正是教学重点）。开启模式下 **159 / 159 方法摆角全部稳定**，小车设软回中与 ±8 m 软边界避免漂出画面。
 
 ### 4.1 姿态控制通道（飞机 / 导弹 / 无人机，二维单通道）
 
@@ -285,13 +291,13 @@ $$J\ddot\theta + c\dot\theta + k\theta = M$$
 
 ## 5. 公式显示
 
-- 所有控制律与对象方程以**标准 TeX 语法**存储。浏览器支持 MathML 时（Chrome 109+ / Firefox / Safari）**优先输出原生 MathML**：分数、重音、上下标与运算符间距由浏览器数学排版引擎计算；不支持时自动回退到结构化 HTML 渲染。两条路径都零依赖，不需要 KaTeX / MathJax / 联网字体。
+- 所有控制律与对象方程以**标准 TeX 语法**存储，**优先由本地随包 KaTeX 排版**（`vendor/katex/`，零网络请求）；KaTeX 缺失或解析失败时自动回退：浏览器支持 MathML 时（Chrome 109+ / Firefox / Safari）输出原生 MathML，否则用结构化 HTML 渲染。三条路径都离线可用。
 - **重音不再散架**：MathML 路径用 `<mover accent="true">` 把 `˙` / `¨` 压在字母正上方（`θ̈` 紧贴 θ）；HTML 回退路径用 `.m-accent-*` 伪元素绘制。旧实现里希腊字母被误当成运算符、左右各带 0.12em margin，是「重音偏到右上方、θ 与分式之间出现大空隙」的根因，现已按变量渲染。
 - **乘号转隐式乘法**：原配置里的 `K_p · e` 在规范化时丢弃 `·`，输出 `K_p e`——这是控制律的标准写法，也避免了点号两侧各 0.12em 造成的松散感。
 - **正体命令独立渲染**：`\mathrm{d}`、`\operatorname{sgn}` 走 `.m-rm`（数学字体正体），中文 `\text{}` 仍用无衬线字体，两者不再混用同一类。
 - **保留 TeX 显式空格**：`\frac{M l}` 在 MathML 中转为 `<mspace width="0.14em"/>`，分母不再连写成 `Ml`。
 - **分式基线**：HTML 回退路径的分式下压量收到 −0.34em，分数线与等号基线基本齐平；MathML 路径由 `<mfrac>` 自动对齐。
-- **统一的公式卡片语言**：主舞台 `.eqbar`（26px）、右栏 `.eq-card`（22px，绿色左边框 + 「控制律 / CONTROL LAW」标签 + 底部说明）、弹窗与文档的 `.eq-surface` / `.doc-math`（29px / 23px），都用白纸底 + 极淡横线纹理 + 左侧绿色书脊，字号比改造前的 15~17px 提升一级。
+- **统一的公式卡片语言**：右栏 `.eq-card`（22px，绿色左边框 + 「控制律 / CONTROL LAW」标签 + 底部说明）、弹窗与文档的 `.eq-surface` / `.doc-math`（29px / 23px），都用白纸底 + 极淡横线纹理 + 左侧绿色书脊，字号比改造前的 15~17px 提升一级。
 - **控制律块自适应字号**：先按 CSS 基准字号排版并测宽，超出右栏（320px）时按比例缩小（下限 14px），宁可缩小也不把一条公式折成两行。档案默认折叠时容器宽度为 0，测量会早退，展开后由 `toggle` 事件重新计算，避免字号被钉在下限。
 - **公式旁无 TeX / MD 复制按钮**：界面只负责正确、美观地显示公式与变量。文档正文内联公式转为可读 Unicode（`\dot e → ė`、`K_p → Kp`、`s^{3} → s³`），独立公式块仍由 TeX 渲染器排版。
 - 导出菜单可导出公式手册 Markdown、CSV 与图表 PNG；教学文档阅读器只做阅读与跳转，不提供任何副本导出（正文唯一来源是 `docs/methods/*.md`）。
@@ -381,16 +387,16 @@ $$J\ddot\theta + c\dot\theta + k\theta = M$$
 
 ## 9. 架构与验收口径
 
-项目**不再依赖任何历史版本基线**，验收全部基于「当前代码自身可验证的事实」：
+项目验收基于「当前代码自身可验证的事实」。V5.0 的一键验收入口是 `tools/verify-v5.js`（仅 Node 内置模块）：全量脚本语法、159 法 / 12 类 / 6 对象计数、docs-content 键名对齐、文档索引链接有效性、预设 plant 字段完整性、参考流形键名有效性、PARAM_LABELS 重复键检测。V4 期的专项审计工具（audit-poles / audit-formulas / audit-docs / verify-file-protocol 等）保留在 `../控制理论模拟器V4.0/tools/`，其历史验收结果见第 15 节记录。
 
 | 资产 | 验收方式 | 工具 |
 |---|---|---|
-| 159 条控制律（`calculateControlOutput` 的 159 个 `case`） | 分支计数 + 关键公式锚点 + 对象适配修正点存在性 | `tools/verify.js` |
-| 默认对象动力学 | 受力平衡式数值等价（误差 < 1e-12） | `tools/verify.js` |
-| 文档里的闭环极点 | 从多项式求根 → 真实仿真 → 对比衰减率/阻尼比/超调 | `tools/audit-poles.js` |
-| 全部公式（按 159 法重新枚举） | 真实容器宽度下渲染，检查失败/溢出/「一个字母占一行」 | `tools/audit-formulas.js` |
-| 159 份教学文档 | 章节完整性、批注残留、玩梗文风黑名单、`METHOD_EXTRA` 覆盖率 | `tools/audit-docs.js` |
-| 整站运行 | 真实 Chrome 走 `file://` 打开，逐项断言 + 0 控制台错误 | `tools/verify-file-protocol.js` |
+| 159 条控制律（`calculateControlOutput` 的 159 个 `case`） | 分支计数 + 配置/文档键名对齐 | `tools/verify-v5.js` |
+| 文档与索引 | 159 份键名 1:1、索引 0 断链 | `tools/verify-v5.js` |
+| 预设与图例 | 预设 plant 字段完整、REF_FLOW 键与 ref_display 实现一致 | `tools/verify-v5.js` |
+| 文档里的闭环极点 | 从多项式求根 → 真实仿真 → 对比衰减率/阻尼比/超调 | V4 `tools/audit-poles.js`（历史） |
+| 全部公式排版 | 真实容器宽度下渲染，检查失败/溢出 | V4 `tools/audit-formulas.js`（历史） |
+| 整站运行 | 真实 Chrome 走 `file://` 打开，逐项断言 + 0 控制台错误 | V4 `tools/verify-file-protocol.js`（历史） |
 
 `DT=0.02`、分类顺序、命名与 159 条控制律的公式结构稳定；默认参数仅对被审计证明不可用的组合做对象感知覆盖。
 
@@ -406,12 +412,13 @@ $$J\ddot\theta + c\dot\theta + k\theta = M$$
 |---|---|---|---|
 | `空格` | 启动 / 暂停 | `R` | 重置仿真 |
 | `→` | 单步推进 | `D` | 施加脉冲扰动 |
-| `1/2/4` | 切换倍速 | `/` | 聚焦搜索框 |
+| `1/2/4` | 快捷设为 1× / 2× / 4×（速度滑块为对数刻度，0.1×~10×） | `/` | 聚焦左栏搜索框 |
 | `F` | **专注模式（挂起/展开两侧栏）** | `H` | 当前方法教学文档 |
 | `S` | 复制参数链接 | `E` | 导出 CSV |
 | `G` | 术语词典 | `P` | 场景预设 |
-| `M` | **对象模型弹窗（符号与参数）** | `?` | 帮助 |
-| `←/→`（文档内） | 上一讲 / 下一讲 | `Esc` | 关闭浮层 |
+| `M` | **对象模型弹窗（方程与符号）** | `A` | 打开 / 收起智能助手 |
+| `?` | 帮助 | `←/→`（文档内） | 上一讲 / 下一讲 |
+| `Esc` | 关闭浮层 | | |
 
 ---
 
@@ -497,6 +504,8 @@ $$J\ddot\theta + c\dot\theta + k\theta = M$$
 
 ### 复跑
 
+以下审计脚本保留在 `../控制理论模拟器V4.0/tools/`（历史产物，V5 未改动控制律数学，审计结论仍适用）：
+
 ```bash
 node tools/audit-methods.js   # 审计 477 个组合
 node tools/audit-plant.js freeMass --tune --deep   # 默认对象逐方法审计 + 增益搜索（输出 docs/对象调参-freeMass.json）
@@ -572,7 +581,7 @@ node tools/build-fit.js       # 重新生成 js/fit-data.js 与 docs/方法适�
 ### 专项验收
 
 ```bash
-node tools/verify-chatter.js      # 25 项：模式差异、默认参数抖振水平、6 模式均不发散
+node tools/verify-chatter.js      # 25 项：模式差异、默认参数抖振水平、6 模式均不发散（脚本在 V4.0 tools/，历史验收）
 ```
 
 > 顺带修掉一个影响所有下拉参数的 bug：`setParam` 对字符串一律 `parseFloat`，把 `'tanh'`、`'on'` 变成 `NaN`，导致消抖模式与小车位置外环开关在界面上选了却不生效。
@@ -607,7 +616,7 @@ x_ref ──► 外环 PD ──► θ_ref（限幅）──► 内环 159 法�
 
 重新扫描 `Kx/Kv/θ_max` 后取低带宽组合（0.12 / 0.3 / 0.10）：PID / LQR / SMC / TSMC / FTSMC 在 `x_ref = −1 ~ 3 m` 内都能同时锁定位置与摆角。30 s 末段（最后 6 s）实测：PID / LQR / SMC / TSMC 的位置均值误差 < 0.001、位置标准差 0.000、`v_c≈0`、`θ≈0`；FTSMC 标准差 0.016。`x_ref=1.0` 时 PID 终值 0.999 m、SMC 0.99998 m。
 
-为保证「至少两种方法可达成目标」不随迭代退化，新增两条验收：
+为保证「至少两种方法可达成目标」不随迭代退化，V4 期新增两条验收（脚本在 `../控制理论模拟器V4.0/tools/`）：
 
 - 静态：`tools/verify.js` 断言默认外环参数为 `0.12 / 0.3 / 0.10`，并实际运行 PID 与 SMC 各 1200 步，要求两者同时满足 `|x_c−x_ref|<0.12` 且 `|θ|<0.12`；
 - 浏览器：`tools/verify-file-protocol.js` 在真实页面内同样跑 PID 与 SMC，作为 file:// 验收硬条件。
@@ -618,8 +627,10 @@ x_ref ──► 外环 PD ──► θ_ref（限幅）──► 内环 159 法�
 
 ## 15. 开发期验收与记录
 
+> 本节为 V4 期（2026-11-13）的历史验收记录，所用专项脚本保留在 `../控制理论模拟器V4.0/tools/`；V5.0 的日常验收入口为 `node tools/verify-v5.js`。
+
 ```bash
-cd 控制理论模拟器V3.0
+cd 控制理论模拟器V4.0
 node tools/verify.js                  # 静态验收（仅 Node 内置模块）
 node tools/verify-file-protocol.js    # 真实 Chrome 直接以 file:// 打开验收
 node tools/build-docs.js              # 重新生成 159 份离线文档
@@ -659,55 +670,61 @@ node tools/verify-chatter.js          # 滑模消抖专项（6 模式差异 + �
 
 ---
 
-## 17. 部署到 Netlify（前后端分离）
+## 16. 部署到 Netlify（前后端分离）
 
 ### 目录约定
 
 ```
-控制理论模拟器V3.0/
-├── netlify.toml        ← 站点配置：publish 目录、functions 目录、路由、安全头
+控制理论模拟器V5.0/
+├── netlify.toml        ← 站点配置：publish=public、functions=netlify/functions、安全头
 ├── public/             ← 前端静态站（Netlify publish 目录）
-├── functions/api/      ← 后端 Netlify Functions（无服务器）
+├── netlify/functions/  ← 后端 Netlify Functions 2.0（顶层文件 + config.path 路由）
+├── functions/api/      ← 后端备选：Cloudflare Pages Functions（部署 Cloudflare 时用）
 └── tools/              ← 开发期脚本（不发布）
 ```
 
 | 层 | 目录 | 内容 | 是否必需 |
 |---|---|---|---|
 | 前端 | `public/` | `index.html` + `styles.css` + `js/` + `vendor/katex/` + `assets/` + `docs/` | **必需**（整站在这里） |
-| 后端 | `functions/api/` | `health.js`（健康检查）、`share.js`（实验快照存取） | 可选（前端默认不调用） |
-| 构建 | `netlify.toml` | `publish = "public"`、`functions = "functions"`、`/api/*` 路由、缓存与安全头 | 必需 |
-| 开发 | `tools/` | 校验脚本（不发布） | 不发布 |
+| 后端 | `netlify/functions/` | `chat.js`（智能助手代理）、`health.js`（健康检查）、`share.js`（快照存取，前端默认不调用） | 可选（不部署时助手自动降级本地检索） |
+| 构建 | `netlify.toml` | `publish = "public"`、`functions = "netlify/functions"`、缓存与安全头；**不做 `/api/*` rewrite**（与 Functions 2.0 的 `config.path` 冲突） | 必需 |
+| 开发 | `tools/` | 校验与生成脚本（不发布） | 不发布 |
 
 ### 部署步骤
 
-1. 把**整个项目目录**推到 GitHub / GitLab（Netlify 支持 Git 导入，也支持直接拖拽）。
+1. 把**整个项目目录**推到 GitHub / GitLab（Netlify 支持 Git 导入）。
 2. Netlify 后台 → **Add new site → Import an existing project**。
 3. 构建配置保持与 `netlify.toml` 一致即可（Netlify 会自动读取）：
    - **Build command**：留空（零构建，没有 npm 依赖）
    - **Publish directory**：`public`
-   - **Functions directory**：`functions`
+   - **Functions directory**：`netlify/functions`
 4. Deploy。站点根即 `public/index.html`。
 
 也可以用 CLI：
 
 ```bash
 npm i -g netlify-cli
-netlify deploy --dir=public --functions=functions
-netlify deploy --prod --dir=public --functions=functions
+netlify deploy --dir=public --functions=netlify/functions
+netlify deploy --prod --dir=public --functions=netlify/functions
 ```
+
+> **不要**用「拖拽 / Deploy manually」只上传 `public/`：那不会打包函数，`/api/chat` 会 404（助手会自动回落直连/本地检索，但同源代理不可用）。
+
+**Cloudflare Pages 备选**：把 `functions/api/` 作为 Pages Functions 目录（按文件路径自动映射 `/api/*`），publish 目录同样为 `public/`；环境变量在 Pages 后台 Settings → Environment variables 配置。两套后端逻辑等价，任选其一，不要同时启用。
 
 ### 为什么这样切分
 
-- **前端零依赖、零构建**：`public/` 是一份纯静态站，任何静态托管（Netlify / GitHub Pages / Nginx / OSS）都能直接用；`file://` 双击也照常工作。搬到 `public/` 只是为了让「发布目录」在语义上明确。
-- **后端只在需要时存在**：`/api/*` 由 `netlify.toml` 的 redirect 转到 `/.netlify/functions/:splat`。前端默认**完全不依赖**后端——不部署 Functions，站点也是 100% 可用的（分享仍走 URL / localStorage）。
-- **缓存分层**（`public/_headers`）：`vendor/`（KaTeX）与 `assets/` 版本锁定 → 一年 immutable；`js/` 随发布变 → `must-revalidate`；`docs/` → 1 小时。`_headers` 跟着 publish 目录走，换任何静态托管都生效。
+- **前端零依赖、零构建**：`public/` 是一份纯静态站，任何静态托管（Netlify / GitHub Pages / Nginx / OSS）都能直接用；`file://` 双击也照常工作。
+- **后端只在需要时存在**：`/api/*` 由 Functions 2.0 的 `export const config = { path: '/api/…' }` 直接声明路由（V4 的 rewrite 写法会与之冲突导致 404，V5 已移除）。前端默认**完全不依赖**后端——不部署 Functions，站点也是 100% 可用的（分享仍走 URL / localStorage，助手降级本地检索）。
+- **缓存分层**（`public/_headers`）：`vendor/`（KaTeX）与 `assets/` 版本锁定 → 一年 immutable；`js/` 随发布变 → `must-revalidate`；`docs/` → 1 小时；`/api/*` → no-store。`_headers` 跟着 publish 目录走，换任何静态托管都生效。
 
 ### 后端接口
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| `GET` | `/api/health` | 后端健康检查 + 站点自述（版本、159 法 / 12 类 / 3 对象、默认对象） |
-| `POST` | `/api/share` | 存入实验快照：`{ data: {...} }` → `{ id }`（上限 64 KB） |
+| `POST` | `/api/chat` | DeepSeek 同源代理（限流 20 次/分/IP；流式上游超时 55s / 非流式 30s；智能助手调用） |
+| `GET` | `/api/health` | 后端健康检查 + 站点自述（版本、159 法 / 12 类 / 6 对象、默认对象） |
+| `POST` | `/api/share` | 存入实验快照：`{ data: {...} }` → `{ id }`（上限 64 KB；前端默认不调用） |
 | `GET` | `/api/share?id=<id>` | 取回快照 `{ id, data, createdAt }` |
 | `DELETE` | `/api/share?id=<id>` | 删除快照 |
 
@@ -724,7 +741,7 @@ curl https://<your-site>.netlify.app/api/health
 
 ---
 
-## 16. 已知限制
+## 17. 已知限制
 
 - **教学文档的推导是直观推导/设计思路，不是严格数学证明**；控制律为教学演示级离散化实现，参数量级不等价于工程整定值。
 - 倒立摆用**在上平衡点线性化**的模型（`sinθ≈θ, cosθ≈1`，且忽略摆杆自身转动惯量 `I_p=0`），仅在 `|θ| ≲ 0.3 rad` 内可信；大角度摆起需要完整非线性模型（本平台不做）。

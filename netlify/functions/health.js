@@ -11,7 +11,7 @@ const APP = {
   version: '5.0',
   methods: 159,
   categories: 12,
-  plants: 3,
+  plants: 6,
   defaultPlant: 'freeMass',
   renderEngine: 'KaTeX（本地 vendor）+ MathML 回退',
   papers: 159, paperVerified: 153

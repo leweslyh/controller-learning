@@ -1170,6 +1170,30 @@
     drawCharts(p);
   }
 
+  /* 把单张曲线重绘到任意画布（全屏放大浮层用）：
+     临时把 els 指向目标画布、其余置空，drawCharts 会自动跳过空画布；
+     syncSize 按目标画布的 CSS 尺寸 × dpr 生成高分辨率位图。 */
+  const CHART_KEYS = ['pos', 'phase', 'ctrl', 'cart', 'vel'];
+  function drawOne(key, canvas) {
+    if (!canvas || CHART_KEYS.indexOf(key) < 0) return false;
+    if (!els) init();
+    const backup = els;
+    const savedHover = hover;
+    els = { sim: backup.sim, pos: null, phase: null, ctrl: null, cart: null, vel: null };
+    els[key] = canvas;
+    hover = { key: null, x: null, y: null };
+    rangeCache.key = '';
+    try {
+      drawCharts(theme());
+    } finally {
+      els = backup;
+      hover = savedHover;
+      rangeCache.key = '';
+      sim.markDirty();
+    }
+    return true;
+  }
+
   /* ── 悬停读数 ─────────────────────────────────────── */
   function nearestPoint(x, w) {
     const active = sim.getActiveTrack();
@@ -1311,5 +1335,5 @@
     }
   }
 
-  NS.charts = { init, draw, resize, refreshTheme, exportCSV, exportPNG, download, getPlantView };
+  NS.charts = { init, draw, drawOne, resize, refreshTheme, exportCSV, exportPNG, download, getPlantView };
 })(window);

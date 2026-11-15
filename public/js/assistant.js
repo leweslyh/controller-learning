@@ -966,15 +966,21 @@
     if (el.apiKey) el.apiKey.value = '';
     if (el.keyState) el.keyState.textContent = keyStateText();
   }
+  let settingsLastFocus = null;
   function closeSettings() {
     if (!el.settingsOverlay) return;
+    if (NS.ui && NS.ui.releaseFocusTrap) NS.ui.releaseFocusTrap(el.settingsOverlay);
     el.settingsOverlay.hidden = true;
     el.settingsBtn.setAttribute('aria-expanded', 'false');
+    if (settingsLastFocus && typeof settingsLastFocus.focus === 'function') settingsLastFocus.focus();
+    settingsLastFocus = null;
   }
   function openSettings() {
     if (!el.settingsOverlay) return;
+    settingsLastFocus = doc.activeElement;
     refreshSettings();
     el.settingsOverlay.hidden = false;
+    if (NS.ui && NS.ui.trapFocus) NS.ui.trapFocus(el.settingsOverlay);
     el.settingsBtn.setAttribute('aria-expanded', 'true');
   }
   function toggleSettings() {

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="控制理论模拟器：多种控制算法、12 类理论体系、3 个经典被控对象与逐法初学者教学文档的离线交互实验台。">
+<meta name="description" content="控制理论模拟器：159 种控制算法、12 类理论体系、6 个被控对象与逐法初学者教学文档的离线交互实验台。">
 <title>纸面控制实验室 · V5.0</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
@@ -148,12 +148,16 @@
       <div class="lab-stats" aria-label="实验台规模">
         <div class="lab-stat"><strong id="stat-methods">—</strong><span>控制算法</span></div>
         <div class="lab-stat"><strong id="stat-categories">—</strong><span>理论体系</span></div>
-        <div class="lab-stat"><strong id="stat-plants">3</strong><span>被控对象</span></div>
+        <div class="lab-stat"><strong id="stat-plants">6</strong><span>被控对象</span></div>
       </div>
       <div class="browser-tabs" role="tablist" aria-label="控制器集合">
         <button type="button" class="tab is-active" role="tab" aria-selected="true" data-scope="all">全部体系</button>
         <button type="button" class="tab" role="tab" aria-selected="false" data-scope="favorites">收藏</button>
         <button type="button" class="tab" role="tab" aria-selected="false" data-scope="recent">最近</button>
+      </div>
+      <div class="browser-search-wrap">
+        <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="browser-search" type="search" placeholder="搜索方法名 / 关键词…（/）" aria-label="搜索控制器">
       </div>
       <div class="browser-body scroll-y" id="browser-list" role="listbox" aria-label="控制器列表"></div>
       <div class="browser-foot">
@@ -214,6 +218,8 @@
         <div class="metric metric-alt" title="累计控制能量 ∫u²dt：包含稳态保持力，稳定后仍会累加"><span class="metric-label">累计能耗 ∫u²dt</span><strong class="metric-value" id="m-energy">0.0</strong><span class="metric-unit">J</span></div>
         <div class="metric metric-alt" title="动态能耗 ∫(u−u_h)²dt：扣除稳态保持力，收敛后趋于平稳"><span class="metric-label">动态能耗 ∫(u−uₕ)²dt</span><strong class="metric-value" id="m-energy-dyn">0.0</strong><span class="metric-unit">J</span></div>
         <div class="metric metric-alt" title="稳态保持力：维持目标位置所需的持续控制力"><span class="metric-label" id="l-hold">稳态保持力 uₕ</span><strong class="metric-value" id="m-hold">0.00</strong><span class="metric-unit" id="unit-hold">N</span></div>
+        <div class="metric metric-alt" title="最大超调量：越过目标一侧的峰值 / 指令幅度 × 100%"><span class="metric-label">超调 σ</span><strong class="metric-value" id="m-os">0.0</strong><span class="metric-unit">%</span></div>
+        <div class="metric metric-alt" title="调节时间 t_s：误差进入 ±2% 指令带并保持的时刻"><span class="metric-label">调节时间 t_s</span><strong class="metric-value" id="m-ts">—</strong><span class="metric-unit">s</span></div>
       </section>
 
       <section class="panel charts-panel" aria-labelledby="charts-title">
@@ -227,16 +233,16 @@
             <span class="status-sep" aria-hidden="true"></span>
             <span class="status-item" id="status-track">轨迹 A · 录制中</span>
             <span class="status-item status-freeze" id="status-freeze" hidden>
-              <svg class="icon" aria-hidden="true"><use href="#i-record"/></svg> 波形与指标已定格
-              <button type="button" id="btn-rerecord" class="text-btn">重新录制</button>
+              <svg class="icon" aria-hidden="true"><use href="#i-record"/></svg> 已定格
+              <button type="button" id="btn-rerecord" class="text-btn">重录</button>
             </span>
           </div>
           <div class="charts-controls" role="group" aria-label="仿真速度">
-            <span class="ctrl-label">速度</span>
-            <div class="speed-group" id="speed-group">
-              <button type="button" class="speed-btn is-active" data-speed="1">1×</button>
-              <button type="button" class="speed-btn" data-speed="2">2×</button>
-              <button type="button" class="speed-btn" data-speed="4">4×</button>
+            <button type="button" id="speed-reset" class="ctrl-label speed-reset" title="点击恢复默认仿真速度 1×" aria-label="恢复默认仿真速度 1×">仿真速度</button>
+            <div class="speed-group">
+              <input type="range" id="speed-slider" min="0" max="1000" step="1" value="500"
+                     aria-label="仿真速度" aria-valuetext="1×" title="仿真速度（对数刻度）：前半程 0.1×~1×，后半程 1×~10×">
+              <output id="speed-value" class="speed-value" for="speed-slider">1×</output>
             </div>
             <button type="button" id="btn-compare" class="chip-btn chip-wide" aria-pressed="false" title="保留当前曲线并与下一次实验叠加对比">
               <svg class="icon" aria-hidden="true"><use href="#i-compare"/></svg><span>A/B 对比</span>
@@ -245,23 +251,23 @@
         </div>
 
         <div class="charts-grid" id="charts-grid">
-          <figure class="chart-card">
+          <figure class="chart-card" data-zoom="pos" role="button" tabindex="0" aria-label="位置响应曲线，点击全屏放大">
             <figcaption><span class="chart-index">01</span> <span id="chart-cap-pos">位置响应</span> <small id="chart-metric-pos">RMSE —</small></figcaption>
             <div class="chart-canvas-wrap"><canvas id="canvas-pos" role="img" aria-label="位置响应曲线"></canvas><div class="chart-tooltip" hidden></div></div>
           </figure>
-          <figure class="chart-card">
+          <figure class="chart-card" data-zoom="phase" role="button" tabindex="0" aria-label="相空间轨迹，点击全屏放大">
             <figcaption><span class="chart-index">02</span> 相空间轨迹 <small id="chart-metric-phase">x / v</small></figcaption>
             <div class="chart-canvas-wrap"><canvas id="canvas-phase" role="img" aria-label="相空间轨迹"></canvas><div class="chart-tooltip" hidden></div></div>
           </figure>
-          <figure class="chart-card">
+          <figure class="chart-card" data-zoom="ctrl" role="button" tabindex="0" aria-label="执行器输出曲线，点击全屏放大">
             <figcaption><span class="chart-index">03</span> 执行器输出 <small id="chart-metric-ctrl">E — J</small></figcaption>
             <div class="chart-canvas-wrap"><canvas id="canvas-ctrl" role="img" aria-label="控制力曲线"></canvas><div class="chart-tooltip" hidden></div></div>
           </figure>
-          <figure class="chart-card" id="chart-card-cart" hidden>
+          <figure class="chart-card" id="chart-card-cart" data-zoom="cart" role="button" tabindex="0" aria-label="小车位置曲线，点击全屏放大" hidden>
             <figcaption><span class="chart-index">04</span> 小车位置 <small id="chart-metric-cart">x_c / m</small></figcaption>
             <div class="chart-canvas-wrap"><canvas id="canvas-cart" role="img" aria-label="小车位置曲线"></canvas><div class="chart-tooltip" hidden></div></div>
           </figure>
-          <figure class="chart-card" id="chart-card-vel">
+          <figure class="chart-card" id="chart-card-vel" data-zoom="vel" role="button" tabindex="0" aria-label="速度曲线，点击全屏放大">
             <figcaption><span class="chart-index">04</span> <span id="chart-cap-vel">速度</span> <small id="chart-metric-vel">v / m·s⁻¹</small></figcaption>
             <div class="chart-canvas-wrap"><canvas id="canvas-vel" role="img" aria-label="速度曲线"></canvas><div class="chart-tooltip" hidden></div></div>
           </figure>
@@ -386,12 +392,31 @@
   </section>
 </div>
 
+<!-- 曲线全屏放大：把单张曲线重绘到高分辨率画布 -->
+<div class="overlay" id="overlay-zoom" hidden>
+  <div class="overlay-mask" data-close="overlay-zoom"></div>
+  <section class="modal zoom-modal" role="dialog" aria-modal="true" aria-labelledby="zoom-title">
+    <header class="drawer-head">
+      <div>
+        <h2 id="zoom-title">波形检视</h2>
+        <p>高分辨率重绘 · 坐标轴、网格与全部轨迹与主画布一致</p>
+      </div>
+      <button type="button" class="btn btn-icon" data-close="overlay-zoom" aria-label="关闭放大视图">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div class="zoom-canvas-wrap">
+      <canvas id="canvas-zoom" role="img" aria-label="放大后的波形"></canvas>
+    </div>
+  </section>
+</div>
+
 <div class="overlay" id="overlay-guide" hidden>
   <div class="overlay-mask" data-close="overlay-guide"></div>
   <section class="modal guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title">
     <div class="guide-hero"><svg class="icon"><use href="#i-spark"/></svg></div>
     <h2 id="guide-title">欢迎来到纸面控制实验室</h2>
-    <p>左侧控制算法按 12 类理论体系分章陈列，选定后挑一个被控对象，调节右侧增益，观察中央刚体响应与三张带完整坐标轴的曲线。首次进入会展开目录，之后自动挂到左边框；按 F 进入专注模式。</p>
+    <p>左侧控制算法按 12 类理论体系分章陈列，选定后挑一个被控对象，调节右侧增益，观察中央刚体响应与四张带完整坐标轴的曲线（倒立摆为五张）。首次进入会展开目录，之后自动挂到左边框；按 F 进入专注模式。</p>
     <div class="guide-steps">
       <div><span>01</span> 选控制器与对象</div>
       <div><span>02</span> 读教学文档 / 调参</div>
@@ -679,6 +704,8 @@
 <script src="js/math.js"></script>
 <!-- 教学文档单一来源（由 tools/build-docs.js 从 public/docs/methods/*.md 打包，离线 file:// 可读） -->
 <script src="js/docs-content.js"></script>
+<!-- 专题导读（public/docs/guides/*.md）：如「一键最优增益求解原理」 -->
+<script src="js/guides-content.js"></script>
 <script src="js/simulation.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/fit-data.js"></script>

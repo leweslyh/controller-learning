@@ -13,7 +13,7 @@
   const doc = global.document;
   const STORAGE_KEY = 'ctrlsim.v4.prefs';
   const LEGACY_STORAGE_KEY = 'ctrlsim.v3.prefs';
-  const VERSION = '4.0';
+  const VERSION = '5.0';
 
   let prefs = loadPrefs();
   let rafId = null;
@@ -76,7 +76,9 @@
   }
 
   function changeParam(key, value, store, needReset) {
-    sim.setParam(key, value, store);
+    const effective = sim.setParam(key, value, store);
+    /* 内核钳制后的有效值回显到滑块/数值框，保证界面与状态一致 */
+    if (typeof effective === 'number') ui.syncParamControl(key, effective);
     const shouldReset = !!needReset || key === 'initialX';
     if (shouldReset) {
       sim.resetSim();
@@ -95,7 +97,13 @@
     ui.updateStatus(statusInfo());
     charts.draw();
   }
-  function disturb() { sim.triggerDisturbance(); touch(); ui.toast('已施加 150 N 脉冲扰动'); }
+  function disturb() {
+    sim.triggerDisturbance(); touch();
+    /* 扰动幅值随对象缩放：平移对象 150 N，姿态对象 150×0.06 = 9 N·m */
+    const plant = sim.getPlant();
+    const mag = 150 * (plant.disturbanceScale || 1);
+    ui.toast('已施加 ' + mag + ' ' + (plant.inputUnit || 'N') + ' 脉冲扰动');
+  }
   function reset() {
     sim.resetSim();
     ui.renderParams();
@@ -112,6 +120,20 @@
     refreshAll();
     ui.toast('全部参数已恢复默认');
   }
+  /* 实验参数下某个子卡片的「恢复本组」：只动这一组，其他参数保持不动 */
+  function resetParamGroup(id) {
+    if (!sim.resetParamGroup(id)) return;
+    ui.renderPlant();
+    ui.renderParams();
+    ui.renderTracks();
+    refreshAll();
+    const section = (D.PARAM_SECTIONS || []).find((s) => s.id === id);
+    const name = id === 'plant'
+      ? '被控对象属性 · ' + sim.getPlant().name
+      : (section ? section.title : '该组参数');
+    ui.toast('「' + name + '」已恢复默认');
+  }
+
   function setSpeed(value) { sim.setSpeed(value); ui.updateStatus(statusInfo()); }
 
   function toggleCompare() {
@@ -134,6 +156,49 @@
     ui.renderParams();
     refreshAll();
     ui.toast('已加载场景：' + preset.title);
+  }
+
+  /* ── 一键最优增益求解（移植自 index(14).html 的 handleSolveOptimalCurrent） ──
+     求解是同步计算：先让 toast 绘制出来，再在下一帧跑寻优，避免界面看起来卡死。 */
+  function solveOptimal() {
+    const s = sim.getSettings();
+    const name = (D.CONTROLLER_CONFIGS[s.method] || {}).name || s.method;
+    ui.toast('正在为「' + name + '」求解最优增益…');
+    global.setTimeout(() => {
+      const res = sim.optimizeGains();
+      s.ctrlParams = res.params;
+      sim.resetSim();
+      ui.markSolved(s.method);   /* 重绘增益卡并露出「求解原理 · 教学文档」入口 */
+      ui.renderTracks();
+      refreshAll();
+      ui.toast(res.improvePct > 0.5
+        ? '已按「' + res.ruleName + '」求解：综合指标提升 ' + res.improvePct.toFixed(1) + '%'
+        : '最优增益已求解：当前已处于最优参数邻域');
+    }, 40);
+  }
+
+  /* 打开「一键最优增益求解」的原理专题（public/docs/guides/001-最优增益求解原理.md） */
+  function openSolveGuide() {
+    if (NS.docs && NS.docs.openGuide) NS.docs.openGuide('optimal-gain');
+    else ui.toast('原理文档未打包：请运行 node tools/build-docs.js');
+  }
+
+  /* ── 经典对决预设（移植自 index(14).html 的 PRESET_COMPARISONS） ── */
+  function applyDuel(id, optimize) {
+    const duel = (D.DUELS || []).find((d) => d.id === id);
+    if (!duel) return;
+    ui.toast('正在推演 ' + duel.label + (optimize ? '（含最优增益求解）' : '') + '…');
+    global.setTimeout(() => {
+      const res = sim.duel(duel.a, duel.b, { optimize: !!optimize, seconds: 3.5 });
+      if (!res) { ui.toast('对决失败：方法键不存在'); return; }
+      prefs.recent = [duel.b, duel.a].concat(prefs.recent.filter((k) => k !== duel.a && k !== duel.b)).slice(0, 12);
+      savePrefs();
+      ui.setRecent(prefs.recent);
+      ui.setActiveMethod(duel.b);
+      ui.renderTracks();
+      refreshAll();
+      ui.toast('对决完成：' + duel.label + ' · A/B 曲线已叠加');
+    }, 40);
   }
 
   function toggleFavorite(key) {
@@ -307,11 +372,21 @@
       switch (ev.key) {
         case ' ': ev.preventDefault(); toggleRun(); break;
         case 'ArrowRight': ev.preventDefault(); step(); break;
+        case '/': {
+          /* 聚焦左栏搜索；目录处于挂起态时先展开 */
+          ev.preventDefault();
+          const ws = doc.getElementById('workspace');
+          if (ws && ws.classList.contains('is-browser-collapsed') && NS.rails && NS.rails.toggleLeft) NS.rails.toggleLeft();
+          const box = doc.getElementById('browser-search');
+          if (box) box.focus();
+          break;
+        }
         case 'r': case 'R': reset(); break;
         case 'd': case 'D': disturb(); break;
+        case 'o': case 'O': solveOptimal(); break;
         case '1': setSpeed(1); break;
         case '2': setSpeed(2); break;
-        case '4': setSpeed(4); break;
+        case '4': setSpeed(4); break; // 快捷预设；精细调节用速度滑块
         case 's': case 'S': share(); break;
         case 'e': case 'E': exportCSV(); break;
         case 'm': case 'M': ui.renderPlantModel(); ui.openOverlayById('overlay-plant'); break;
@@ -353,7 +428,7 @@
       charts.init();
       ui.init({
         selectMethod, changeParam, toggleRun, step, disturb, reset, rerecord,
-        resetParams, setSpeed, toggleCompare, applyPreset, toggleFavorite,
+        resetParams, resetParamGroup, setSpeed, toggleCompare, applyPreset, applyDuel, solveOptimal, openSolveGuide, toggleFavorite,
         toggleTheme, dismissGuide, exportCSV, exportPNG, exportFormulaBook, exportPapers, share,
         selectPlant
       });
@@ -375,5 +450,5 @@
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 
-  NS.app = { init, refreshAll, share, buildHash, restoreFromHash, exportPapers };
+  NS.app = { init, refreshAll, share, buildHash, restoreFromHash, exportPapers, solveOptimal, applyDuel };
 })(window);
