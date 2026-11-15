@@ -138,13 +138,26 @@
       const y = mapY(v);
       if (y >= plot.y0 - 2 && y <= plot.y1 + 2) ctx.fillText(tickLabel(v), plot.x0 - 6, y);
     });
+    /* 轴标题（放在绘图区边缘内侧，避免与刻度数字重叠） */
+    ctx.fillStyle = p.muted; ctx.font = '600 10px ui-monospace, monospace';
+    const xTitleW = ctx.measureText(cfg.xLabel).width;
+    ctx.font = '10px ui-monospace, monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     cfg.x.ticks.forEach((v) => {
       const x = mapX(v);
-      if (x >= plot.x0 - 2 && x <= plot.x1 + 2) ctx.fillText(tickLabel(v) + (cfg.xUnit || ''), x, h - 8);
+      if (x < plot.x0 - 2 || x > plot.x1 + 2) return;
+      const txt = tickLabel(v) + (cfg.xUnit || '');
+      const tw = ctx.measureText(txt).width;
+      /* 右下角留给轴标题：与之相撞的刻度数字整体左移，避免叠字 */
+      const limit = plot.x1 - xTitleW - 8;
+      if (x + tw / 2 > limit) {
+        ctx.textAlign = 'right';
+        ctx.fillText(txt, Math.max(plot.x0 + tw / 2, limit), h - 8);
+        ctx.textAlign = 'center';
+      } else {
+        ctx.fillText(txt, x, h - 8);
+      }
     });
-
-    // 轴标题（放在绘图区边缘内侧，避免与刻度数字重叠）
     ctx.fillStyle = p.muted; ctx.font = '600 10px ui-monospace, monospace';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText(cfg.yLabel, plot.x0 + 4, 3);
@@ -208,8 +221,9 @@
     ctx.strokeStyle = p.border; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(w, groundY); ctx.stroke();
     ctx.fillStyle = p.muted; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center';
-    /* 倒立摆的地面刻度由 paintPendulum 按镜头滚动的米制标尺绘制，这里跳过静态刻度 */
-    if (view.kind !== 'pendulum') {
+    /* 倒立摆的地面刻度由 paintPendulum 按镜头滚动的米制标尺绘制；
+       姿态通道的刻度画在圆周上（paintAttitude），这里都跳过静态地面刻度 */
+    if (view.kind !== 'pendulum' && view.kind !== 'attitude') {
       view.ticks.forEach((t) => {
         const x = mapX(t);
         if (x >= 0 && x <= w) { ctx.fillRect(x, groundY, 1.5, 5); ctx.fillText(String(t), x, groundY + 17); }
@@ -594,6 +608,331 @@
 
   }
 
+  /* ── 姿态通道（飞机 / 导弹 / 无人机，二维单通道） ─────────────────────
+     姿态是**绕质心**的转动，质心不动、机体绕它转，所以画成「质心 + 量角器」：
+       质心十字 = 转动中心（固定在画布中心，不平移）
+       水平虚线 = 零位基准（θ = 0 时机头指向）
+       机体外形 = 当前姿态，以质心为中心旋转 -θ（飞机/导弹侧视图，四旋翼正视图）
+       刻度圈   = 量角器，红色虚线 = 目标姿态 r，蓝色弧 = 当前角 θ
+       弧线箭头 = 控制力矩 M 的方向与相对大小（绕质心）
+     角度按数学正方向（抬头/左滚为正）绘制，而 canvas 的 y 轴向下，故旋转取 -θ。 */
+  function attitudePoint(cx, cy, ang, len) {
+    return { x: cx + Math.cos(ang) * len, y: cy - Math.sin(ang) * len };
+  }
+  /* 圆弧端点箭头：tip 为弧线终点，cx/cy 为圆心，dir 为弧线沿 canvas 角度增(+1)/减(-1) 的走向。
+     半径向量必须先单位化，否则箭头尺寸会被半径放大成巨块。 */
+  function arcHead(ctx, tipX, tipY, cx, cy, dir, size) {
+    const dx = tipX - cx, dy = tipY - cy;
+    const rl = Math.hypot(dx, dy) || 1;
+    const ux = dx / rl, uy = dy / rl;      /* 径向单位向量 */
+    const tx = -uy * dir, ty = ux * dir;    /* 切向单位向量（径向旋转 90°） */
+    ctx.beginPath();
+    ctx.moveTo(tipX + tx * size, tipY + ty * size);
+    ctx.lineTo(tipX - tx * size * 0.35 + ux * size * 0.45, tipY - ty * size * 0.35 + uy * size * 0.45);
+    ctx.lineTo(tipX - tx * size * 0.35 - ux * size * 0.45, tipY - ty * size * 0.35 - uy * size * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  /* 飞机：侧视图（机头朝 +x，画布 y 向下 → 机腹在 +y）。俯仰角就是这张图里的转动角。
+     比例走「极修长」路线：机身长径比约 11:1，垂尾低而后掠、平尾极薄、机腹只露一点主翼根——
+     细节只保留能一眼认出是飞机的几个特征，不堆装饰。 */
+  function glyphAircraft(ctx, s, color, p) {
+    ctx.save();
+    ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1.1;
+    ctx.lineJoin = 'round';
+    /* 垂直尾翼：低、明显后掠（机尾上方的三角，侧视最好认的特征） */
+    ctx.beginPath();
+    ctx.moveTo(-0.32 * s, -0.060 * s);
+    ctx.lineTo(-0.52 * s, -0.35 * s);
+    ctx.lineTo(-0.60 * s, -0.35 * s);
+    ctx.lineTo(-0.60 * s, -0.040 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 平尾：极薄的一片，向后伸出 */
+    ctx.beginPath();
+    ctx.moveTo(-0.52 * s, -0.045 * s);
+    ctx.lineTo(-0.76 * s, -0.070 * s);
+    ctx.lineTo(-0.76 * s, -0.038 * s);
+    ctx.lineTo(-0.54 * s, -0.015 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 主翼根部：侧视只见贴着机腹的薄剖面，向后掠一小段 */
+    ctx.beginPath();
+    ctx.moveTo(0.16 * s, 0.055 * s);
+    ctx.lineTo(-0.06 * s, 0.055 * s);
+    ctx.lineTo(-0.18 * s, 0.130 * s);
+    ctx.lineTo(0.00 * s, 0.130 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 机身：尖机头 → 极细等直径段 → 上翘尾锥 */
+    ctx.beginPath();
+    ctx.moveTo(0.80 * s, -0.004 * s);
+    ctx.lineTo(0.52 * s, -0.060 * s);
+    ctx.lineTo(-0.30 * s, -0.066 * s);
+    ctx.lineTo(-0.58 * s, -0.030 * s);
+    ctx.lineTo(-0.66 * s, 0.012 * s);
+    ctx.lineTo(-0.56 * s, 0.044 * s);
+    ctx.lineTo(-0.28 * s, 0.060 * s);
+    ctx.lineTo(0.52 * s, 0.056 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 座舱盖：扁扁的一小片 */
+    ctx.beginPath();
+    ctx.moveTo(0.24 * s, -0.055 * s);
+    ctx.lineTo(0.16 * s, -0.130 * s);
+    ctx.lineTo(0.04 * s, -0.135 * s);
+    ctx.lineTo(-0.02 * s, -0.062 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 进气道（机头下方的小斜口，一笔带过） */
+    ctx.beginPath();
+    ctx.moveTo(0.28 * s, 0.044 * s);
+    ctx.lineTo(0.14 * s, 0.044 * s);
+    ctx.lineTo(0.17 * s, 0.078 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 机身高光：一条细白线，让细长机身有金属质感 */
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(0.46 * s, -0.034 * s); ctx.lineTo(-0.30 * s, -0.040 * s); ctx.stroke();
+    ctx.restore();
+  }
+  /* 导弹：侧视图。比例参考响尾蛇/爱国者——短粗弹身、小而后掠的尾翼 + 中段小翼，
+     只用「短」和「小翼」两个特征说清它不是火箭。 */
+  function glyphMissile(ctx, s, color, p) {
+    ctx.save();
+    ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1;
+    ctx.lineJoin = 'round';
+    /* 尾翼：小而后掠的梯形翼（响尾蛇的尾翼比例，不做大三角） */
+    [-1, 1].forEach((sy) => {
+      ctx.beginPath();
+      ctx.moveTo(-0.42 * s, sy * 0.044 * s);
+      ctx.lineTo(-0.52 * s, sy * 0.160 * s);
+      ctx.lineTo(-0.58 * s, sy * 0.160 * s);
+      ctx.lineTo(-0.55 * s, sy * 0.044 * s);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+    /* 中段小翼（响尾蛇前部的小三角翼） */
+    [-1, 1].forEach((sy) => {
+      ctx.beginPath();
+      ctx.moveTo(0.18 * s, sy * 0.044 * s);
+      ctx.lineTo(0.08 * s, sy * 0.130 * s);
+      ctx.lineTo(0.02 * s, sy * 0.130 * s);
+      ctx.lineTo(0.05 * s, sy * 0.044 * s);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+    /* 弹体：短卵形尖锥头 → 等直径细弹身 → 收口尾段 */
+    ctx.beginPath();
+    ctx.moveTo(0.66 * s, 0);
+    ctx.quadraticCurveTo(0.50 * s, -0.040 * s, 0.32 * s, -0.048 * s);
+    ctx.lineTo(-0.36 * s, -0.048 * s);
+    ctx.lineTo(-0.50 * s, -0.030 * s);
+    ctx.lineTo(-0.54 * s, 0);
+    ctx.lineTo(-0.50 * s, 0.030 * s);
+    ctx.lineTo(-0.36 * s, 0.048 * s);
+    ctx.lineTo(0.32 * s, 0.048 * s);
+    ctx.quadraticCurveTo(0.50 * s, 0.040 * s, 0.66 * s, 0);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* 尾喷口 */
+    ctx.fillStyle = p.border;
+    ctx.beginPath();
+    ctx.moveTo(-0.56 * s, -0.020 * s); ctx.lineTo(-0.50 * s, -0.017 * s);
+    ctx.lineTo(-0.50 * s, 0.017 * s); ctx.lineTo(-0.56 * s, 0.020 * s);
+    ctx.closePath(); ctx.fill();
+    /* 弹体高光 */
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(-0.34 * s, -0.024 * s); ctx.lineTo(0.34 * s, -0.024 * s); ctx.stroke();
+    ctx.restore();
+  }
+  /* 四旋翼：正视图（沿机头方向看过去）。滚转角 φ 就是这张图绕质心的转动角。
+     构型做成「机身 + 两条机臂 + 电机舱 + 四副旋翼」，一眼能认出是四旋翼：
+     近侧两副旋翼实心，远侧两副压淡并向上错开一点，形成前后层次。 */
+  function glyphUav(ctx, s, color, p) {
+    ctx.save();
+    /* 远侧两副旋翼（先画、半透明、向上错开，暗示在机身另一侧） */
+    ctx.fillStyle = color;
+    [-1, 1].forEach((sx) => {
+      ctx.globalAlpha = 0.38;
+      ctx.beginPath();
+      ctx.ellipse(sx * 0.70 * s, -0.17 * s, 0.25 * s, 0.07 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+    /* 机臂（两条横贯左右的粗杆，中间略低、端部略高） */
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(2.8, 0.13 * s); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-0.70 * s, 0.06 * s); ctx.lineTo(0, 0.0);
+    ctx.lineTo(0.70 * s, 0.06 * s); ctx.stroke();
+    /* 电机舱 + 近侧两副旋翼 */
+    [-1, 1].forEach((sx) => {
+      const mx = sx * 0.70 * s;
+      /* 电机舱（竖直短柱） */
+      ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1.1;
+      pillPath(ctx, mx - 0.055 * s, -0.12 * s, 0.11 * s, 0.22 * s, 0.04 * s);
+      ctx.fill(); ctx.stroke();
+      /* 旋翼盘（实心 + 上方一道残影，表现旋转） */
+      ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.ellipse(mx, -0.14 * s, 0.33 * s, 0.085 * s, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.ellipse(mx, -0.21 * s, 0.27 * s, 0.055 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      /* 桨毂 */
+      ctx.beginPath();
+      ctx.arc(mx, -0.14 * s, 0.05 * s, 0, Math.PI * 2);
+      ctx.fillStyle = p.surface || '#FFFFFF'; ctx.fill();
+    });
+    /* 机身（中央短舱，压在机臂之上） */
+    ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1.2;
+    pillPath(ctx, -0.24 * s, -0.15 * s, 0.48 * s, 0.31 * s, 0.12 * s);
+    ctx.fill(); ctx.stroke();
+    /* 机头摄像头（正视图正对镜头）+ 天线 */
+    ctx.beginPath();
+    ctx.arc(0, 0.03 * s, 0.07 * s, 0, Math.PI * 2);
+    ctx.fillStyle = p.surface || '#FFFFFF'; ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.6, 0.05 * s);
+    ctx.beginPath();
+    ctx.moveTo(0, -0.15 * s); ctx.lineTo(0, -0.27 * s); ctx.stroke();
+    /* 起落架两条支腿 */
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.8, 0.055 * s);
+    [-0.13, 0.13].forEach((sx) => {
+      ctx.beginPath();
+      ctx.moveTo(sx * s, 0.14 * s);
+      ctx.lineTo(sx * 1.35 * s, 0.36 * s);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+  function paintAttitude(b) {
+    const { ctx, w, h, state, target, view, p, plant } = b;
+    /* 质心固定在画布中心：姿态是绕质心的转动，机体不平移 */
+    const cx = w / 2, cy = h / 2;
+    const R = Math.min(w * 0.40, h * 0.38);
+    const ang = clamp(state.x, -1.55, 1.55);
+    const tAng = clamp(target, -1.55, 1.55);
+    const glyph = view.glyph || 'aircraft';
+    const size = Math.max(22, R * 0.64);
+    const accent = movingColor(b);
+    const u = b.u || 0;
+    /* 半径分层（由内到外）：机体 → 力矩弧 → 绿色目标虚线 → 目标标记 → 量角器刻度 */
+    const R_ARC = R * 0.72;      /* 力矩弧半径：起点落在蓝色当前姿态虚线上（同半径、角度=θ） */
+    const R_TGT_IN = R * 0.72;   /* 绿色目标虚线内端（与力矩弧同半径，但角度=目标 r） */
+    const R_TGT_OUT = R * 0.90;  /* 绿色目标虚线外端 */
+    const R_MARK = R * 0.97;     /* 绿色目标标记（量角器内侧的目标位置） */
+    const R_TICK = R * 1.04;     /* 量角器刻度圈 */
+
+    /* 零位基准：过质心的水平虚线（θ = 0 的机头指向） */
+    ctx.save();
+    ctx.setLineDash([5, 5]); ctx.strokeStyle = p.grid; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(14, cy); ctx.lineTo(w - 14, cy); ctx.stroke();
+    ctx.restore();
+
+    /* 量角器：每 10° 一个短刻度，30° 为主刻度（角度制，不用弧度） */
+    ctx.save();
+    ctx.strokeStyle = p.muted; ctx.lineWidth = 1;
+    for (let d = -90; d <= 90; d += 10) {
+      const a = d * Math.PI / 180;
+      const major = d % 30 === 0;
+      const p1 = attitudePoint(cx, cy, a, R_TICK);
+      const p2 = attitudePoint(cx, cy, a, R_TICK + R * (major ? 0.06 : 0.03));
+      ctx.globalAlpha = major ? 0.85 : 0.3;
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+    ctx.restore();
+    view.ticks.forEach((tk) => {
+      if (!tk) return;
+      const pt = attitudePoint(cx, cy, tk, R_TICK + R * 0.13);
+      label(ctx, Math.round(tk * 180 / Math.PI) + '°', pt.x, pt.y + 3, p.muted, 'center',
+        '9px ui-monospace, monospace');
+    });
+
+    /* 目标姿态：绿色虚线（从质心沿目标角 r 径向延伸）+ 量角器上的绿色目标标记 */
+    const gt0 = attitudePoint(cx, cy, tAng, R_TGT_IN);
+    const gt1 = attitudePoint(cx, cy, tAng, R_TGT_OUT);
+    ctx.save();
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = p.r; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(gt0.x, gt0.y); ctx.lineTo(gt1.x, gt1.y); ctx.stroke();
+    ctx.setLineDash([]);
+    /* 目标标记：量角器内侧的短粗绿线 + 圆点 */
+    ctx.strokeStyle = p.r; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    const gm0 = attitudePoint(cx, cy, tAng, R_TGT_OUT);
+    const gm1 = attitudePoint(cx, cy, tAng, R_MARK);
+    ctx.beginPath(); ctx.moveTo(gm0.x, gm0.y); ctx.lineTo(gm1.x, gm1.y); ctx.stroke();
+    ctx.fillStyle = p.r;
+    ctx.beginPath(); ctx.arc(gm1.x, gm1.y, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    /* 当前姿态轴：从质心沿 θ 指向刻度圈的细参考线（机体外形盖在上面） */
+    const ap = attitudePoint(cx, cy, ang, R * 0.99);
+    ctx.save();
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.45;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ap.x, ap.y); ctx.stroke();
+    ctx.restore();
+
+    /* 质心：十字 + 实心点，强调「绕质心转动」（十字画在机体之下，避免糊住外形） */
+    ctx.save();
+    ctx.strokeStyle = p.text; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy);
+    ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8);
+    ctx.stroke();
+    ctx.restore();
+
+    /* 机体：以质心为转动中心，绕 -θ 旋转（机头指向当前姿态） */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-ang);
+    const painter = { aircraft: glyphAircraft, missile: glyphMissile, uav: glyphUav }[glyph] || glyphAircraft;
+    const objScale = glyph === 'uav' ? 0.72 : 1;   /* 四旋翼正视图包络较宽，整体缩一档与飞机/导弹协调 */
+    painter(ctx, size * objScale, accent, p);
+    ctx.restore();
+
+    /* 质心标记（压在机体之上，一个小点） */
+    ctx.save();
+    ctx.fillStyle = p.text;
+    ctx.beginPath(); ctx.arc(cx, cy, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    /* 控制力矩：画面里唯一的箭头。
+       起点落在蓝色当前姿态虚线上、随被控物体当前姿态 θ 一起转动，
+       扫向方向 = 力矩方向，弧长随 |M| 增长；M > 0 表示把角度往大的方向推（抬头）。 */
+    const uRef = Math.max(1, (plant.defaultActuatorLimit || 50));
+    const spanA = 0.26 + 0.58 * Math.sqrt(clamp(Math.abs(u) / uRef, 0, 1));
+    const dir = u >= 0 ? 1 : -1;
+    const active = Math.abs(u) > 0.5;
+    const aEnd = ang + dir * spanA;        /* 弧末端（姿态空间） */
+    ctx.save();
+    ctx.strokeStyle = p.accent;
+    ctx.globalAlpha = active ? 1 : 0.5;
+    ctx.lineWidth = 2.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, R_ARC, -ang, -aEnd, dir > 0);
+    ctx.stroke();
+    const mTip = attitudePoint(cx, cy, aEnd, R_ARC);
+    ctx.fillStyle = p.accent;
+    ctx.globalAlpha = 1;
+    arcHead(ctx, mTip.x, mTip.y, cx, cy, dir > 0 ? -1 : 1, 7);
+    ctx.restore();
+
+    /* M 的数值胶囊：放在弧末端的外侧（沿扫向再偏一点，避开绿色目标虚线），
+       样式与 msd / 倒立摆的力数值标签一致（accent 底 + 米白字）。 */
+    const radX = Math.cos(aEnd), radY = -Math.sin(aEnd);     /* 径向单位向量（屏幕坐标） */
+    const tanX = -Math.sin(aEnd), tanY = -Math.cos(aEnd);    /* 切向单位向量（姿态角增大方向） */
+    const lx = mTip.x + radX * 12 + tanX * 16 * dir;
+    const ly = mTip.y + radY * 12 + tanY * 16 * dir;
+    const text = (plant.inputSymbol || 'M') + '=' + fmt(u, 2) + ' ' + (plant.inputUnit || 'N·m');
+    ctx.save();
+    ctx.font = 'bold 9px ui-monospace, monospace';
+    const tw = ctx.measureText(text).width;
+    const pw = tw + 10, ph = 14;
+    ctx.globalAlpha = active ? 0.95 : 0.6;
+    ctx.fillStyle = p.accent;
+    pillPath(ctx, lx - pw / 2, ly - ph / 2, pw, ph, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#FFF8EE';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, lx, ly + 0.5);
+    ctx.restore();
+  }
+
   function drawSimulation(p) {
     const size = syncSize(els.sim);
     if (!size) return;
@@ -611,17 +950,19 @@
     };
     drawSimBackdrop(b);
     const painters = {
-      spring: paintSpring, cart: paintCart, pendulum: paintPendulum
+      spring: paintSpring, cart: paintCart, pendulum: paintPendulum, attitude: paintAttitude
     };
     (painters[view.kind] || paintSpring)(b);
     drawSimReadout(b);
   }
 
   /* ── 数据范围（缓存，避免每帧重复扫描） ─────────────── */
-  function collectRanges(tracks, method) {
+  /* angK：角度对象的显示换算系数（弧度 → 度）；其余对象为 1 */
+  function collectRanges(tracks, method, angK) {
+    const k = angK || 1;
     let count = 0;
     for (const t of tracks) count += t.points.length;
-    const key = tracks.length + ':' + count + ':' + (tracks.length ? tracks[tracks.length - 1].id : '') + ':' + method;
+    const key = tracks.length + ':' + count + ':' + (tracks.length ? tracks[tracks.length - 1].id : '') + ':' + method + ':' + k;
     if (rangeCache.key === key && rangeCache.value) return rangeCache.value;
 
     let minT = Infinity, maxT = -Infinity;
@@ -645,14 +986,14 @@
         const pt = t.points[i];
         if (pt.t < minT) minT = pt.t;
         if (pt.t > maxT) maxT = pt.t;
-        consider(pt.x, 'y'); consider(pt.target, 'y'); consider(0, 'y');
+        consider(pt.x * k, 'y'); consider(pt.target * k, 'y'); consider(0, 'y');
         consider(pt.u, 'u'); consider(pt.hold, 'u'); consider(0, 'u');
-        consider(pt.x, 'x'); consider(pt.v, 'v');
+        consider(pt.x * k, 'x'); consider(pt.v, 'v');
         consider(pt.xc, 'c'); consider(pt.vc, 'cv');
         if (method === 'PPC' && Number.isFinite(pt.ref)) {
-          consider(pt.target + pt.ref, 'y'); consider(pt.target - pt.ref, 'y');
+          consider((pt.target + pt.ref) * k, 'y'); consider((pt.target - pt.ref) * k, 'y');
         }
-        if (REF_FLOW_METHODS.indexOf(method) >= 0 && Number.isFinite(pt.ref)) consider(pt.ref, 'y');
+        if (REF_FLOW_METHODS.indexOf(method) >= 0 && Number.isFinite(pt.ref)) consider(pt.ref * k, 'y');
       }
     }
     if (!Number.isFinite(minT)) { minT = 0; maxT = 2; }
@@ -698,8 +1039,11 @@
     const method = sim.getSettings().method;
     const plant = sim.getPlant();
     const view = getPlantView(plant.id);
-    const R = collectRanges(tracks, method);
-    lastRange = { x: R.x, y: R.y, u: R.u, plant };
+    /* 角度对象按度显示（人类习惯），内部计算仍用弧度 */
+    const angK = view.deg ? 180 / Math.PI : 1;
+    const angUnit = view.deg ? '°' : plant.unit;
+    const R = collectRanges(tracks, method, angK);
+    lastRange = { x: R.x, y: R.y, u: R.u, plant, view };
     const mainPts = active ? active.points : [];
 
     /* 01 位置响应 */
@@ -707,21 +1051,21 @@
     if (posSize) {
       const { ctx, w, h } = posSize;
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.x, y: R.y, xUnit: 's', xLabel: 't / s', yLabel: view.symbol + ' , r / ' + plant.unit
+        x: R.x, y: R.y, xUnit: 's', xLabel: 't / s', yLabel: view.symbol + ' , r / ' + angUnit
       });
       clipPlot(ctx, axes.plot);
-      plotSeries(ctx, mainPts, 'target', p.r, axes, { width: 1.8 });
+      plotSeries(ctx, mainPts, (pt) => pt.target * angK, p.r, axes, { width: 1.8 });
       if (REF_FLOW_METHODS.indexOf(method) >= 0) {
-        plotSeries(ctx, mainPts, 'ref', p.ref, axes, { width: 1.4, dash: [4, 4], alpha: 0.9 });
+        plotSeries(ctx, mainPts, (pt) => pt.ref * angK, p.ref, axes, { width: 1.4, dash: [4, 4], alpha: 0.9 });
       }
       if (method === 'PPC' && mainPts.length > 1) {
         [1, -1].forEach((sign) => plotSeries(ctx, mainPts,
-          (pt) => pt.target + sign * (pt.ref || 0), p.ref, axes,
+          (pt) => (pt.target + sign * (pt.ref || 0)) * angK, p.ref, axes,
           { width: 1, dash: [3, 3], alpha: 0.75 }));
       }
       for (const t of tracks) {
         const isActive = t === active;
-        plotSeries(ctx, t.points, 'x', isActive ? p.x : t.color, axes,
+        plotSeries(ctx, t.points, (pt) => pt.x * angK, isActive ? p.x : t.color, axes,
           { width: isActive ? 2.4 : 1.6, alpha: isActive ? 1 : 0.72 });
       }
       ctx.restore();
@@ -733,7 +1077,8 @@
     if (phaseSize) {
       const { ctx, w, h } = phaseSize;
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.px, y: R.pv, xUnit: plant.unit, xLabel: view.symbol + ' / ' + plant.unit, yLabel: 'v / ' + plant.vUnit
+        x: R.px, y: R.pv, xUnit: angUnit, xLabel: view.symbol + ' / ' + angUnit,
+        yLabel: (view.rateSymbol || 'v') + ' / ' + plant.vUnit
       });
       clipPlot(ctx, axes.plot);
       for (const t of tracks) {
@@ -744,13 +1089,13 @@
         ctx.beginPath(); ctx.strokeStyle = isActive ? p.phase : t.color; ctx.lineWidth = isActive ? 1.8 : 1.4;
         ctx.lineJoin = 'round';
         for (let i = 0; i < pts.length; i++) {
-          const px = axes.mapX(pts[i].x), py = axes.mapY(pts[i].v);
+          const px = axes.mapX(pts[i].x * angK), py = axes.mapY(pts[i].v);
           if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
         ctx.stroke(); ctx.restore();
         const last = pts[pts.length - 1];
         ctx.beginPath(); ctx.fillStyle = isActive ? p.u : t.color;
-        ctx.arc(axes.mapX(last.x), axes.mapY(last.v), 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.arc(axes.mapX(last.x * angK), axes.mapY(last.v), 3.5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
       drawCrosshair(ctx, axes, p, 'phase');
@@ -804,7 +1149,7 @@
       const isPend = plant.id === 'pendulum';
       const axes = drawAxes(ctx, w, h, p, {
         x: R.x, y: isPend ? R.cv : R.pv, xUnit: 's', xLabel: 't / s',
-        yLabel: (isPend ? 'v_c' : 'v') + ' / ' + plant.vUnit
+        yLabel: (isPend ? 'v_c' : (view.rateSymbol || 'v')) + ' / ' + plant.vUnit
       });
       clipPlot(ctx, axes.plot);
       const vKey = isPend ? 'vc' : 'v';
@@ -849,19 +1194,31 @@
         const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
         hover = { key, x, y };
         const pt = nearestPoint(x, rect.width);
-        const unit = lastRange ? lastRange.plant.unit : 'm';
-        const vUnit = lastRange ? lastRange.plant.vUnit : 'm/s';
+        const plantR = lastRange ? lastRange.plant : null;
+        const viewR = lastRange ? lastRange.view : null;
+        const unit = plantR ? plantR.unit : 'm';
+        const vUnit = plantR ? plantR.vUnit : 'm/s';
+        const sym = (viewR && viewR.symbol) || 'x';
+        const rateSym = (viewR && viewR.rateSymbol) || 'v';
+        const uSym = (plantR && plantR.inputSymbol) || 'u';
+        const uUnit = (plantR && plantR.inputUnit) || 'N';
+        /* 角度对象按度显示 */
+        const degMode = !!(viewR && viewR.deg);
+        const k = degMode ? 180 / Math.PI : 1;
+        const angUnit = degMode ? '°' : unit;
         if (tip && pt) {
           let text;
-          if (key === 'phase') text = 'x = ' + fmt(pt.x, 3) + ' ' + unit + '\nv = ' + fmt(pt.v, 3) + ' ' + vUnit;
-          else if (key === 'ctrl') text = 't = ' + fmt(pt.t, 2) + ' s\nu = ' + fmt(pt.u, 2) + ' N\n维持力 = ' + fmt(pt.hold, 2) + ' N';
+          if (key === 'phase') text = sym + ' = ' + fmt(pt.x * k, 2) + ' ' + angUnit + '\n' + rateSym + ' = ' + fmt(pt.v, 3) + ' ' + vUnit;
+          else if (key === 'ctrl') text = 't = ' + fmt(pt.t, 2) + ' s\n' + uSym + ' = ' + fmt(pt.u, 2) + ' ' + uUnit +
+            '\n保持量 = ' + fmt(pt.hold, 2) + ' ' + uUnit;
           else if (key === 'cart') text = 't = ' + fmt(pt.t, 2) + ' s\nx_c = ' + fmt(pt.xc || 0, 3) + ' m';
           else if (key === 'vel') {
-            const isPend = lastRange && lastRange.plant && lastRange.plant.id === 'pendulum';
-            text = 't = ' + fmt(pt.t, 2) + ' s\n' + (isPend ? 'v_c' : 'v') + ' = ' +
+            const isPend = plantR && plantR.id === 'pendulum';
+            text = 't = ' + fmt(pt.t, 2) + ' s\n' + (isPend ? 'v_c' : rateSym) + ' = ' +
               fmt(isPend ? (pt.vc || 0) : pt.v, 3) + ' ' + vUnit;
           }
-          else text = 't = ' + fmt(pt.t, 2) + ' s\nx = ' + fmt(pt.x, 3) + ' ' + unit + '\nr = ' + fmt(pt.target, 3) + ' ' + unit;
+          else text = 't = ' + fmt(pt.t, 2) + ' s\n' + sym + ' = ' + fmt(pt.x * k, 2) + ' ' + angUnit +
+            '\nr = ' + fmt(pt.target * k, 2) + ' ' + angUnit;
           tip.textContent = text;
           tip.hidden = false;
           tip.style.left = clamp(x + 12, 4, Math.max(4, rect.width - 140)) + 'px';

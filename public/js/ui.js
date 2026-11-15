@@ -68,15 +68,21 @@
     const plant = sim.getPlant();
     renderPlantModel();
     const setUnit = (id, value) => { const el = $(id); if (el) el.textContent = value; };
-    setUnit('u-x', plant.unit);
+    /* 角度对象按度显示（内部计算仍用弧度）：状态、误差、RMSE 用 °，角速度保持 rad/s */
+    const view0 = (NS.charts && NS.charts.getPlantView) ? NS.charts.getPlantView(plant.id) : null;
+    const angUnit = view0 && view0.deg ? '°' : plant.unit;
+    setUnit('u-x', angUnit);
     setUnit('u-v', plant.vUnit);
-    setUnit('u-e', plant.unit);
-    setUnit('u-rmse', plant.unit);
-    /* 输入语义随对象切换：平移对象是力 u（N），倒立摆是力矩 τ（N·m） */
+    setUnit('u-e', angUnit);
+    setUnit('u-rmse', angUnit);
+    /* 输入语义随对象切换：平移对象是力 u（N），姿态通道是力矩 M（N·m） */
     const inSym = plant.inputSymbol || 'u', inUnit = plant.inputUnit || 'N';
-    setUnit('l-u', '控制力 ' + inSym);
+    const isTorque = inUnit.indexOf('N·m') >= 0;
+    const inName = isTorque ? '控制力矩' : '控制力';
+    const holdName = isTorque ? '稳态保持力矩' : '稳态保持力';
+    setUnit('l-u', inName + ' ' + inSym);
     setUnit('unit-u', inUnit);
-    setUnit('l-hold', '稳态保持力 ' + inSym + 'ₕ');
+    setUnit('l-hold', holdName + ' ' + inSym + 'ₕ');
     setUnit('unit-hold', inUnit);
     const view = (NS.charts && NS.charts.getPlantView) ? NS.charts.getPlantView(plant.id) : null;
     if (view) {
@@ -89,16 +95,23 @@
       if (capPos) capPos.textContent = view.stateName + '响应';
     }
     /* 观测器图组随对象变化：仅倒立摆有平动自由度，显示小车位置曲线；
-       速度图放最后一位（倒立摆为小车速度 v_c，其余对象为质量速度 v） */
+       速度图放最后一位（倒立摆为小车速度 v_c，姿态通道为角速度 ω，其余为质量速度 v） */
     const cartCard = $('chart-card-cart');
     if (cartCard) cartCard.hidden = plant.id !== 'pendulum';
+    const isPendulum = plant.id === 'pendulum';
+    const isAttitude = !!(view && view.angular) && !isPendulum;
     const capVel = $('chart-cap-vel');
-    if (capVel) capVel.textContent = plant.id === 'pendulum' ? '小车速度' : '速度';
+    if (capVel) {
+      capVel.textContent = isPendulum ? '小车速度' : (isAttitude ? (view.rateName || '角速度') : '速度');
+    }
     const velMetric = $('chart-metric-vel');
-    if (velMetric) velMetric.textContent = (plant.id === 'pendulum' ? 'v_c' : 'v') + ' / ' + plant.vUnit;
+    if (velMetric) {
+      const rateSym = isPendulum ? 'v_c' : ((view && view.rateSymbol) || 'v');
+      velMetric.textContent = rateSym + ' / ' + plant.vUnit;
+    }
     renumberCharts();
     const phaseMetric = $('chart-metric-phase');
-    if (phaseMetric) phaseMetric.textContent = view.symbol + ' / ' + plant.unit + ' · ' + view.rateName + ' / ' + plant.vUnit;
+    if (phaseMetric) phaseMetric.textContent = view.symbol + ' / ' + angUnit + ' · ' + view.rateName + ' / ' + plant.vUnit;
   }
 
   /* 图卡可显隐（小车位置仅倒立摆有），按可见顺序重排 01/02/… 编号 */
@@ -120,13 +133,18 @@
     const st = sim.getSettings();
     const pv = (st.plantParams && st.plantParams[plant.id]) ? st.plantParams[plant.id] : plant.defaults;
     const eff = plant.effective(pv);
+    const vw = (NS.charts && NS.charts.getPlantView) ? NS.charts.getPlantView(plant.id) : null;
+    const isAngular = !!(vw && vw.angular);
     const fmt = (v) => (typeof v === 'number' && isFinite(v)
       ? (Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2)) : esc(String(v)));
 
     const INPUT_NOTE = {
       msd: 'u 是作用在质量块上的水平力（N），直接出现在方程右端；对象自身带回复力 kx 与阻尼 cẋ。',
       freeMass: 'u 是作用在质量块上的水平力（N），位置是它的二重积分；对象没有回复力，也没有阻尼。',
-      pendulum: 'F 是作用在小车上的水平推力（N）。摆杆转动与小车平动联立积分，小车会真实移动；目标角非零时没有静止平衡点，小车会持续加速，这与“持续推力”一致。'
+      pendulum: 'F 是作用在小车上的水平推力（N）。摆杆转动与小车平动联立积分，小车会真实移动；目标角非零时没有静止平衡点，小车会持续加速，这与“持续推力”一致。',
+      aircraft: 'M 是升降舵产生的俯仰力矩（N·m），直接作用在俯仰轴上。它不改变机速，只把机头抬起或压下；真实飞机上舵偏角 δ 与力矩近似成正比 M = q·S·c·C_mδ·δ，本实验把这条线性增益折进了 M。',
+      missile: 'M 是舵面产生的俯仰力矩（N·m）。弹体静不稳定，撤掉力矩就会翻，所以这里看不到"松手自稳"——控制量必须持续存在，M 的稳态值正是配平所需的那一点点力（k·θ_ref，负号表示方向相反）。',
+      uav: 'M 是左右两侧旋翼转速差产生的滚转力矩（N·m）。四旋翼没有气动回中力矩，力矩撤掉的瞬间角速度只是被阻尼慢慢吃掉，滚转角会停在任意位置。'
     };
     const inputNote = INPUT_NOTE[plant.id] || 'u 是施加到被控对象上的控制输入。';
 
@@ -155,8 +173,16 @@
           '开启后，外环把小车位置误差映射为期望倾角：</p>' +
           '<div class="model-eff-eq">' + NS.math.render('\\theta_{ref}=sat\\left(K_x(x_{ref}-x_c)-K_v\\dot{x}_c,\\ \\pm\\theta_{max}\\right)', { display: 'block' }) + '</div>' +
           '<p>内环控制器（PID / SMC / LQR 等任选）跟踪该期望倾角，借助“小车先向目标方向倾斜、再回正”的方式把小车稳稳停在 <code>x_ref</code>。当前取值：' +
-          'x_ref = ' + fmt(st.cartTarget) + ' m · K_x = ' + fmt(st.cartKp) + ' rad/m · K_v = ' + fmt(st.cartKd) + ' rad·s/m · θ_max = ' + fmt(st.cartThetaMax) + ' rad。</p>' +
+          'x_ref = ' + fmt(st.cartTarget) + ' m · K_x = ' + fmt(st.cartKp) + ' rad/m · K_v = ' + fmt(st.cartKd) + ' rad·s/m · θ_max = ' + fmt(st.cartThetaMax * 180 / Math.PI, 1) + '°。</p>' +
           '<p>推荐内环：SMC / LQR / TSMC / FTSMC / PID（默认参数下均可稳定停在 x_ref）。</p>' +
+        '</section>';
+    }
+    /* 姿态通道进阶：由 plant.teaching 数据驱动，任何对象都能自带一段专属讲解 */
+    if (plant.teaching && plant.teaching.title) {
+      advancedBlock +=
+        '<section class="model-block">' +
+          '<h3><span>05</span> ' + esc(plant.teaching.title) + '</h3>' +
+          NS.math.md(plant.teaching.body) +
         '</section>';
     }
 
@@ -187,9 +213,10 @@
       '<section class="model-block">' +
         '<h3><span>03</span> 等效二阶形式（159 条控制律的接入点）</h3>' +
         '<div class="model-eff">' +
-          '<div class="model-eff-eq">' + NS.math.render('m\\ddot{x}+c\\dot{x}+kx=u') + '</div>' +
+          '<div class="model-eff-eq">' +
+            NS.math.render(plant.effTex || 'm\\ddot{x}+c\\dot{x}+kx=u') + '</div>' +
           '<div class="model-eff-grid">' +
-            '<div><span>m</span><strong>' + fmt(eff.m) + '</strong></div>' +
+            '<div><span>' + (isAngular ? 'J' : 'm') + '</span><strong>' + fmt(eff.m) + '</strong></div>' +
             '<div><span>c</span><strong>' + fmt(eff.c) + '</strong></div>' +
             '<div><span>k</span><strong>' + fmt(eff.k) + '</strong></div>' +
           '</div>' +
@@ -614,8 +641,16 @@
     const scale = item.displayScale || 1;
     const shown = (Number(value) * scale).toFixed(item.decimals !== undefined ? item.decimals : d);
     const plant = sim.getPlant();
-    let unit = item.displayUnit || paramUnit(item.key, item.unit || '');
-    if (item.key === 'target' || item.key === 'initialX') unit = plant.unit;
+    /* 单位解析优先级：显式 displayUnit → 被控对象属性（plant.params 自带单位）
+       → 与环境力/力矩相关的量（随对象输入量纲走，姿态通道是 N·m 而非 N）
+       → 全局 PARAM_UNITS 字典 */
+    const FORCE_KEYS = { actuatorLimit: 1, actuatorDeadzone: 1, contDisturbance: 1, coulombFriction: 1 };
+    let unit;
+    if (item.displayUnit) unit = item.displayUnit;
+    else if (store === 'plant') unit = item.unit || '';
+    else if (FORCE_KEYS[item.key]) unit = plant.inputUnit || 'N';
+    else unit = paramUnit(item.key, item.unit || '');
+    if ((item.key === 'target' || item.key === 'initialX') && !item.displayUnit) unit = plant.unit;
     if (item.type === 'select') {
       const opts = item.options.map((o) => '<option value="' + esc(o.value) + '"' +
         (String(value) === String(o.value) ? ' selected' : '') + '>' + esc(o.label) + '</option>').join('');
@@ -672,12 +707,19 @@
         const view = (NS.charts && NS.charts.getPlantView) ? NS.charts.getPlantView(plant.id) : null;
         items = section.items.map((item) => {
           const next = { ...item, store: item.store || section.source };
-          /* 目标基准与初始偏置跟随对象量纲：倒立摆是 rad（±0.7），平移对象是 m */
+          /* 目标基准与初始偏置跟随对象量纲：角度对象内部是 rad（±0.7，步长 0.05），
+             界面上按度显示（×180/π，单位 °）；平移对象是 m（±12，步长 0.5）。
+             步长/小数位由 PLANT_VIEWS 声明 */
           if (view && (next.key === 'target' || next.key === 'initialX')) {
             next.min = view.min;
             next.max = view.max;
-            next.step = plant.id === 'pendulum' ? 0.05 : 0.5;
-            next.decimals = plant.id === 'pendulum' ? 2 : 1;
+            next.step = view.step !== undefined ? view.step : 0.5;
+            next.decimals = view.decimals !== undefined ? view.decimals : 1;
+            if (view.deg) {
+              next.displayScale = 180 / Math.PI;
+              next.displayUnit = '°';
+              next.decimals = 1;
+            }
           }
           return next;
         });
@@ -722,16 +764,20 @@
       return (Math.abs(v) < threshold ? 0 : v).toFixed(digits);
     };
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
-    set('m-x', clean(m.x, 3));
+    /* 角度对象按度显示（内部仍是弧度） */
+    const view = (NS.charts && NS.charts.getPlantView) ? NS.charts.getPlantView(sim.getPlant().id) : null;
+    const k = view && view.deg ? 180 / Math.PI : 1;
+    const dg = view && view.deg ? 2 : 3;
+    set('m-x', clean(m.x * k, dg));
     set('m-v', clean(m.v, 3));
-    set('m-e', clean(m.e, 3));
+    set('m-e', clean(m.e * k, dg));
     set('m-u', clean(m.u, 2));
-    set('m-rmse', clean(m.rmse, 3));
+    set('m-rmse', clean(m.rmse * k, dg));
     set('m-energy', clean(m.energy || 0, 1));
     set('m-energy-dyn', clean(m.energyDyn || 0, 1));
     set('m-hold', clean(m.holdForce || 0, 2));
     const pos = $('chart-metric-pos');
-    if (pos) pos.textContent = 'RMSE ' + clean(m.rmse, 3) + (m.frozen ? ' · 定格' : '');
+    if (pos) pos.textContent = 'RMSE ' + clean(m.rmse * k, dg) + (view && view.deg ? '°' : '') + (m.frozen ? ' · 定格' : '');
     const ctrl = $('chart-metric-ctrl');
     if (ctrl) ctrl.textContent = 'E ' + clean(m.energy || 0, 1) + ' J / E₍dyn₎ ' + clean(m.energyDyn || 0, 1) + ' J';
   }
@@ -774,15 +820,21 @@
     if (!host) return;
     const method = sim.getSettings().method;
     const plant = sim.getPlant();
+    const pv = D.PLANT_VIEWS[plant.id] || D.PLANT_VIEWS.msd;
+    const angUnit = pv.deg ? '°' : plant.unit;
     const items = [
-      { label: (D.PLANT_VIEWS[plant.id] || D.PLANT_VIEWS.msd).stateName + ' ' + (D.PLANT_VIEWS[plant.id] || D.PLANT_VIEWS.msd).symbol + ' (' + plant.unit + ')', color: 'var(--curve-x)' },
-      { label: '目标指令 r (' + plant.unit + ')', color: 'var(--curve-r)' }
+      { label: pv.stateName + ' ' + pv.symbol + ' (' + angUnit + ')', color: 'var(--curve-x)' },
+      { label: '目标指令 r (' + angUnit + ')', color: 'var(--curve-r)' }
     ];
     if (REF_FLOW_METHODS.indexOf(method) >= 0) items.push({ label: '辅助参考流形', color: 'var(--curve-ref)', dash: true });
     const inSym = plant.inputSymbol || 'u', inUnit = plant.inputUnit || 'N';
-    items.push({ label: '控制力 ' + inSym + ' (' + inUnit + ')', color: 'var(--curve-u)' });
-    items.push({ label: '稳态保持力 ' + inSym + 'ₕ (' + inUnit + ')', color: 'var(--accent-strong)', dash: true });
-    items.push({ label: '相轨迹 v vs x', color: 'var(--curve-phase)', dot: true });
+    const isTorque = inUnit.indexOf('N·m') >= 0;
+    const inName = isTorque ? '控制力矩' : '控制力';
+    const holdName = isTorque ? '稳态保持力矩' : '稳态保持力';
+    items.push({ label: inName + ' ' + inSym + ' (' + inUnit + ')', color: 'var(--curve-u)' });
+    items.push({ label: holdName + ' ' + inSym + 'ₕ (' + inUnit + ')', color: 'var(--accent-strong)', dash: true });
+    const vSym = pv.rateSymbol || 'v', xSym = pv.symbol || 'x';
+    items.push({ label: '相轨迹 ' + vSym + ' vs ' + xSym, color: 'var(--curve-phase)', dot: true });
     const tracks = sim.getTracks();
     if (tracks.length > 1) {
       tracks.forEach((t) => items.push({ label: '轨迹 ' + t.label + ' · ' + shortName(t.method), color: t.color, dot: true }));

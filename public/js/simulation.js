@@ -1479,7 +1479,11 @@ default: u = 0;
   }
 
   function triggerDisturbance() {
-    impulseRef.current = 150.0;
+    /* 脉冲扰动量按对象量级缩放：平移对象 150 N，姿态通道是 rad 量纲（±0.7），
+       150 N·m 会一帧把机体系打到几十弧度，故用 disturbanceScale 折算。 */
+    const plant = getPlant();
+    const scale = (typeof plant.disturbanceScale === 'number') ? plant.disturbanceScale : 1;
+    impulseRef.current = 150.0 * scale;
     chartStateRef.current.frozen = false;
     chartStateRef.current.freezeTimer = 0;
     if (activeTrack) { activeTrack.frozen = false; activeTrack.freezeTimer = 0; }

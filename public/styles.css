@@ -2063,7 +2063,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--green); outline-off
   display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
   padding: 10px 11px;
   border-bottom: var(--bw-thick) solid var(--frame-line);
-  background: linear-gradient(180deg, var(--green-soft), var(--panel) 94%);
+  background: linear-gradient(180deg, var(--panel-raised), var(--panel) 94%);
   cursor: grab; user-select: none; touch-action: none;
 }
 .assistant-panel.is-dragging .assistant-head { cursor: grabbing; }
@@ -2141,10 +2141,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--green); outline-off
   box-shadow: 0 1px 0 var(--line-soft);
 }
 .assistant-msg--user .assistant-bubble { background: var(--well); border-color: var(--primary-border); }
-.assistant-msg:first-child .assistant-bubble {
-  border-left: 3px solid var(--green);
-  background: var(--well);
-}
+.assistant-msg:first-child .assistant-bubble { background: var(--well); }
 .assistant-bubble p { margin: 0 0 6px; }
 .assistant-bubble p:last-child { margin-bottom: 0; }
 .assistant-bubble strong { font-weight: 800; color: var(--green-deep); }

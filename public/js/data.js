@@ -664,7 +664,7 @@
     },
     {
       id: 'inverted-pendulum', tag: '不稳定对象', title: '倒立摆镇定（极点配置）',
-      desc: '摆杆初始偏离竖直 0.15 rad，开环必然倒下。观察状态反馈如何把右半平面极点配置到左半平面，用移动小车的水平推力把摆杆托回竖直。',
+      desc: '摆杆初始偏离竖直 8.6°，开环必然倒下。观察状态反馈如何把右半平面极点配置到左半平面，用移动小车的水平推力把摆杆托回竖直。',
       method: 'PolePlacement', plant: 'pendulum', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0 }, env: { ...DEFAULT_ENV }
     },
     {
@@ -678,6 +678,44 @@
       desc: '同一串级结构，内环换成滑模 SMC；位置保持更平滑，可与 PID 串级对照收敛速度与抖振。',
       method: 'SMC', plant: 'pendulum', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0 },
       env: { ...DEFAULT_ENV, cartLoop: 'on', cartTarget: 1.0 }
+    },
+    /* ── 姿态控制通道（二维单通道）：飞机 / 导弹 / 无人机 ──────────────
+       每个场景都把「对象脾气 → 控制器该干什么」这条因果摆在最显眼处。 */
+    {
+      id: 'aircraft-pitch-pid', tag: '姿态教学', title: '飞机俯仰姿态 · PID 跟踪',
+      desc: '静稳定通道（k>0）：松杆后气流自己会把机头拉回平飞，PID 只是让它更快更准。观察「稳态保持力」——维持 14° 抬头需要一小笔持续的配平力矩。',
+      method: 'PID', plant: 'aircraft', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.25 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', initialX: 0.1 }
+    },
+    {
+      id: 'aircraft-trim-static', tag: '静差', title: '静稳定力矩越大，纯比例控制的静差越大',
+      desc: '把静稳定力矩 k 从 4 拉到 10 N·m/rad：气动回中越强，纯 P 控制留下的稳态误差越大（本例 20%，停在 11.5° 而不是 14.3°）。切到 PID，看积分（配平前馈）如何把这段静差磨平——这就是飞机俯仰配平必须用积分的物理原因。',
+      method: 'P', plant: 'aircraft', plantParams: { k: 10 }, ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.25 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'missile-openloop', tag: '不稳定对象', title: '导弹姿态 · 开环必翻',
+      desc: '静不稳定通道（k<0）：气动中心在重心之前，偏差会被气动力矩正反馈放大。用开环前馈启动，初始偏 3.4° 会指数发散——这就是右半平面极点。',
+      method: 'OpenLoop', plant: 'missile', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', initialX: 0.06 }
+    },
+    {
+      id: 'missile-pitch-sf', tag: '姿态教学', title: '导弹姿态 · 状态反馈镇定',
+      desc: '同一个静不稳定弹体，接上状态反馈/极点配置后闭环极点被拉回左半平面，发散变成收敛。把右侧 k 慢慢推回正值，可看到控制难度同步下降。',
+      method: 'PolePlacement', plant: 'missile', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.3 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', initialX: 0.06 }
+    },
+    {
+      id: 'uav-roll-p', tag: '欠阻尼', title: '无人机滚转 · 纯 P 长时间摆动',
+      desc: '四旋翼没有气动回中力矩（k=0），本质是带阻尼的双积分器。只用 P 控制，闭环阻尼比只有 0.03 左右：机身绕着目标角长时间来回摆，几十秒才勉强停下。',
+      method: 'P', plant: 'uav', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.35 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'uav-roll-pd', tag: '姿态教学', title: '无人机滚转 · 加 D 注入电子阻尼',
+      desc: '同样只有位置误差可用，加上 D 项（角速度反馈）后摆动立刻消失。扫 Kd 能看到"阻尼越足、超调越小"的完整趋势——这是飞控里角速率环存在的理由。',
+      method: 'PD', plant: 'uav', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.35 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
     },
     {
       id: 'smc-chatter-raw', tag: '滑模教学', title: '滑模抖振对照（硬切换 sign）',
@@ -777,7 +815,7 @@
         { key: 'cartTarget', label: '小车目标位置 x_ref', unit: 'm', min: -3, max: 3, step: 0.1 },
         { key: 'cartKp', label: '外环比例 Kx', unit: 'rad/m', min: 0.05, max: 2, step: 0.05 },
         { key: 'cartKd', label: '外环阻尼 Kv', unit: 'rad·s/m', min: 0, max: 4, step: 0.1 },
-        { key: 'cartThetaMax', label: '期望倾角限幅 θ_max', unit: 'rad', min: 0.05, max: 0.5, step: 0.01 }
+        { key: 'cartThetaMax', label: '期望倾角限幅 θ_max', unit: 'rad', min: 0.05, max: 0.5, step: 0.01, displayScale: 180 / Math.PI, displayUnit: '°' }
       ]
     },
     {
@@ -864,15 +902,112 @@
       holdForce: (target, p) => (p.M + p.m) * GRAVITY * target,
       restoring: (s, p) => -(p.M + p.m) * GRAVITY * s.x
     },
+
+    /* ── 姿态控制通道（飞机 / 导弹 / 无人机，二维单通道） ─────────────────
+       只保留绕机体一根轴的转动自由度，把三维姿态问题降维成单通道：
+
+           J·θ̈ + c·θ̇ + k·θ = M
+
+         J  绕该轴的转动惯量（kg·m²）
+         c  气动阻尼力矩系数（N·m·s/rad）：与角速度成正比，提供自然阻尼
+         k  静稳定力矩系数（N·m/rad）：
+               k > 0  静稳定  —— 气流把机头吹回来流方向（飞机）
+               k = 0  无力矩回复 —— 姿态完全靠控制器维持（无人机/四旋翼）
+               k < 0  静不稳定 —— 气动中心在重心之前，不管就翻（导弹）
+         M  控制器给出的控制力矩（N·m）
+
+       方程与 m·ẍ + c·ẋ + kx = u 完全同构，因此 159 条控制律一行都不用改，
+       effective() 只要把 J/c/k 映射到 m/c/k 即可复用全部算法与指标。 */
+    aircraft: {
+      id: 'aircraft', name: '飞机（俯仰姿态）', short: '二阶 · 静稳定，带气动阻尼', category: '姿态控制',
+      order: 2,
+      tex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M,\\quad k>0',
+      effTex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M',
+      desc: '升降舵偏转产生的俯仰力矩 $M$ 让机头绕俯仰轴转动。机身上有气动阻尼 $c\\dot{\\theta}$，气流还把机头往"对准来流"的方向拉，因此 $k>0$ 是**静稳定**的：撒手之后飞机自己会慢慢回到平飞，控制器只是让它**更快、更准**地到位。',
+      unit: 'rad', vUnit: 'rad/s', inputSymbol: 'M', inputUnit: 'N·m',
+      defaultTarget: 0.25, defaultInitialX: 0, defaultActuatorLimit: 60,
+      disturbanceScale: 0.06,
+      params: [
+        { key: 'J', label: '俯仰转动惯量 J', unit: 'kg·m²', min: 0.5, max: 8, step: 0.1 },
+        { key: 'c', label: '气动阻尼系数 c', unit: 'N·m·s/rad', min: 0, max: 6, step: 0.1 },
+        { key: 'k', label: '静稳定力矩系数 k', unit: 'N·m/rad', min: 0, max: 12, step: 0.5 }
+      ],
+      defaults: { J: 2.5, c: 2.2, k: 4.0 },
+      effective: (p) => ({ m: p.J, c: p.c, k: p.k }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v - p.k * s.x) / p.J,
+      holdForce: (target, p) => p.k * target,
+      restoring: (s, p) => p.k * s.x,
+      teaching: {
+        title: '进阶 · 静稳定性与配平力矩',
+        body: '画面是**侧视图**：机身绕质心（画布中心的黑点）转动，抬头为正——俯仰通道就是这样一条单自由度回路。\n\n' +
+          '$k$ 就是「气动回中力矩有多强」的量化。从 4 拉到 0，飞机不再自己回平飞：两个共轭复极点退化成原点与 $-c/J$ 两个实极点，响应从「快速回中」变成「靠阻尼慢慢滑回来」。\n\n' +
+          '稳态维持目标角需要持续的气动力矩 $M_h=k\\,\\theta_{ref}$（指标卡「稳态保持力矩」，控制量图里的那条虚线）。$k>0$ 时这是一笔实打实的配平力矩：$k$ 越大，纯 P 控制留下的静差越大——这正是同一台飞机上「配平」与「积分项」的物理来源。'
+      }
+    },
+    missile: {
+      id: 'missile', name: '导弹（俯仰姿态）', short: '二阶 · 静不稳定，开环发散', category: '姿态控制',
+      order: 2,
+      tex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M,\\quad k<0',
+      effTex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M',
+      desc: '细长弹体的气动中心常位于重心之前，气动力矩是**正反馈**：偏得越多，偏得越快。因此 $k<0$，开环极点 $\\pm\\sqrt{|k|/J}$ 有一个落在右半平面，撒手就翻。舵面力矩 $M$ 必须持续把弹体拽住——这是"反馈不是可选项，而是生存必需品"的最直白例子。',
+      unit: 'rad', vUnit: 'rad/s', inputSymbol: 'M', inputUnit: 'N·m',
+      defaultTarget: 0.30, defaultInitialX: 0.06, defaultActuatorLimit: 50,
+      disturbanceScale: 0.06,
+      params: [
+        { key: 'J', label: '俯仰转动惯量 J', unit: 'kg·m²', min: 0.3, max: 5, step: 0.1 },
+        { key: 'c', label: '气动阻尼系数 c', unit: 'N·m·s/rad', min: 0, max: 4, step: 0.1 },
+        { key: 'k', label: '静稳定力矩系数 k', unit: 'N·m/rad', min: -6, max: 2, step: 0.1 }
+      ],
+      defaults: { J: 1.2, c: 0.4, k: -2.0 },
+      effective: (p) => ({ m: p.J, c: p.c, k: p.k }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v - p.k * s.x) / p.J,
+      holdForce: (target, p) => p.k * target,
+      restoring: (s, p) => p.k * s.x,
+      teaching: {
+        title: '进阶 · 把右半平面极点拉回来',
+        body: '画面是**侧视图**：弹体绕质心（画布中心的黑点）转动，抬头为正。默认参数下 $k=-2$、$J=1.2$，开环极点在 $s=+1.29$ 处：初始偏 3.4° 时，即使目标角就是 0，**不控也必然翻**。\n\n' +
+          '切到「开环前馈」按启动，看它如何倒下；再切 PID / 状态反馈 / 滑模，观察 $K_p |k|$ 时闭环极点被拉回左半平面。把 $k$ 慢慢调向 0，你能找到稳定性的临界点——这正是 $K_p>|k|$ 这条判据的可视化。'
+      }
+    },
+    uav: {
+      id: 'uav', name: '四旋翼（滚转姿态）', short: '二阶 · 无力矩回复', category: '姿态控制',
+      order: 2,
+      tex: 'J\\ddot{\\phi}+c\\dot{\\phi}=M',
+      effTex: 'J\\ddot{\\phi}+c\\dot{\\phi}=M\\quad(k=0)',
+      desc: '四旋翼靠两侧电机转速差产生滚转力矩 $M$，机体本身**没有**任何气动回中力矩（$k=0$）：滚转多少度就停在那儿，是一个带阻尼的双积分器。纯 P 控制会等幅漂移，必须靠 D 项注入"电子阻尼"，这与「二阶积分器」对象是同一类脾气，只是量纲换成了角度。',
+      unit: 'rad', vUnit: 'rad/s', inputSymbol: 'M', inputUnit: 'N·m',
+      defaultTarget: 0.35, defaultInitialX: 0, defaultActuatorLimit: 20,
+      disturbanceScale: 0.06,
+      params: [
+        { key: 'J', label: '滚转转动惯量 J', unit: 'kg·m²', min: 0.2, max: 3, step: 0.05 },
+        { key: 'c', label: '旋翼/气动阻尼 c', unit: 'N·m·s/rad', min: 0, max: 2, step: 0.05 }
+      ],
+      defaults: { J: 0.8, c: 0.35 },
+      effective: (p) => ({ m: p.J, c: p.c, k: 0 }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v) / p.J,
+      holdForce: () => 0,
+      restoring: () => 0,
+      teaching: {
+        title: '进阶 · 无回复力矩的姿态回路',
+        body: '画面是**正视图**（沿机头方向看过去）：机臂左右展开，滚转就是整张图绕质心（画布中心的黑点）转动。$k=0$ 时对象是带阻尼的双积分器，开环极点在原点与 $-c/J$。只用 P 控制时闭环阻尼比极低（默认参数下约 0.03），表现为**长时间的来回摆动**；加 D 项相当于把 $c$ 人为加粗，才能把两个极点都推开、压住超调。\n\n' +
+          '把 $c$ 拉到 0 附近，再用 PD 控制器扫 $K_d$：$K_d$ 越大"电子阻尼"越强（超调越小），但过大会放大传感器噪声。这就是飞控里"角速率环"必须存在的理由。'
+      }
+    },
   };
-  /* 每个对象的可视化语义：状态符号、名称、画布坐标范围与绘图类型 */
+  /* 每个对象的可视化语义：状态符号、名称、画布坐标范围与绘图类型
+     angular  true=角度量纲（目标/初始偏置滑块步长用 step/decimals）
+     rateSymbol 速率符号（缺省 v；姿态通道用 ω）
+     glyph    attitude 画法里的机体外形（aircraft / missile / uav） */
   const PLANT_VIEWS = {
-    msd: { kind: 'spring', symbol: 'x', stateName: '位置', rateName: '速度', min: -2, max: 12, ticks: [0, 2, 4, 6, 8, 10] },
-    freeMass: { kind: 'cart', symbol: 'x', stateName: '位置', rateName: '速度', min: -2, max: 12, ticks: [0, 2, 4, 6, 8, 10] },
-    pendulum: { kind: 'pendulum', symbol: 'θ', stateName: '摆角', rateName: '角速度', min: -0.7, max: 0.7, ticks: [-0.6, -0.3, 0, 0.3, 0.6], cartRange: 3 }
+    msd: { kind: 'spring', symbol: 'x', stateName: '位置', rateName: '速度', rateSymbol: 'v', min: -2, max: 12, ticks: [0, 2, 4, 6, 8, 10], step: 0.5, decimals: 1 },
+    freeMass: { kind: 'cart', symbol: 'x', stateName: '位置', rateName: '速度', rateSymbol: 'v', min: -2, max: 12, ticks: [0, 2, 4, 6, 8, 10], step: 0.5, decimals: 1 },
+    pendulum: { kind: 'pendulum', symbol: 'θ', stateName: '摆角', rateName: '角速度', rateSymbol: 'θ̇', min: -0.7, max: 0.7, ticks: [-0.5236, 0.5236], cartRange: 3, angular: true, deg: true, step: 0.05, decimals: 2 },
+    aircraft: { kind: 'attitude', glyph: 'aircraft', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
+    missile: { kind: 'attitude', glyph: 'missile', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
+    uav: { kind: 'attitude', glyph: 'uav', symbol: 'φ', stateName: '滚转角', rateName: '滚转角速度', rateSymbol: 'ω', min: -0.8, max: 0.8, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 }
   };
-  /* 对象显示顺序：默认对象「二阶积分器」排在首位 */
-  const PLANT_LIST = ['freeMass', 'msd', 'pendulum'];
+  /* 对象显示顺序：默认对象「二阶积分器」排在首位；姿态通道对象排在最后 */
+  const PLANT_LIST = ['freeMass', 'msd', 'pendulum', 'aircraft', 'missile', 'uav'];
   function plantDefaults() {
     const all = {};
     PLANT_LIST.forEach((id) => { all[id] = { ...PLANTS[id].defaults }; });
