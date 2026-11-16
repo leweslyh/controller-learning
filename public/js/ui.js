@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    ui.js — 界面层（DOM 构建与局部更新；状态写回全部交给 app.js）
    V4.0：TeX 公式渲染、被控对象选择、能耗口径说明、坐标轴指标外置。
    ============================================================ */
@@ -40,6 +40,9 @@
   let cb = {};
   let scope = 'all';
   let query = '';
+  let levelFilter = 0;
+  let beginnerMode = false;
+  try { beginnerMode = global.localStorage.getItem('ctrlsim.v5.beginner') === '1'; } catch (err) { beginnerMode = false; }
   let favorites = [];
   let recent = [];
   let starFilter = false;
@@ -49,6 +52,8 @@
   let exportMenu = null;
   /* 已经求解过最优增益的方法：用于决定「求解原理 · 教学文档」入口是否露出 */
   const solvedGainMethods = Object.create(null);
+  /* 是否存在可撤销的求解记录（V5.1） */
+  let solveUndoAvailable = false;
 
   function esc(value) {
     return String(value === undefined || value === null ? '' : value)
@@ -74,6 +79,13 @@
   /* ── TeX 公式块（渲染 + 复制 TeX / Markdown） ──────── */
   function formulaBlock(tex) {
     return '<span class="formula-math">' + NS.math.render(tex) + '</span>';
+  }
+
+  /* 块级 Markdown：优先用阅读器同一套解析器（支持 **粗体**、[链接](method:…)），
+     保证弹窗里的讲解与教学文档渲染结果一致 */
+  function blockMd(src) {
+    if (NS.docs && NS.docs.parseMd) return NS.docs.parseMd(src);
+    return NS.math.md(src);
   }
 
   /* ── 被控对象 ─────────────────────────────────────── */
@@ -165,7 +177,12 @@
       pendulum: 'F 是作用在小车上的水平推力（N）。摆杆转动与小车平动联立积分，小车会真实移动；目标角非零时没有静止平衡点，小车会持续加速，这与“持续推力”一致。',
       aircraft: 'M 是升降舵产生的俯仰力矩（N·m），直接作用在俯仰轴上。它不改变机速，只把机头抬起或压下；真实飞机上舵偏角 δ 与力矩近似成正比 M = q·S·c·C_mδ·δ，本实验把这条线性增益折进了 M。',
       missile: 'M 是舵面产生的俯仰力矩（N·m）。弹体静不稳定，撤掉力矩就会翻，所以这里看不到"松手自稳"——控制量必须持续存在，M 的稳态值正是配平所需的那一点点力（k·θ_ref，负号表示方向相反）。',
-      uav: 'M 是左右两侧旋翼转速差产生的滚转力矩（N·m）。四旋翼没有气动回中力矩，力矩撤掉的瞬间角速度只是被阻尼慢慢吃掉，滚转角会停在任意位置。'
+      uav: 'M 是左右两侧旋翼转速差产生的滚转力矩（N·m）。四旋翼没有气动回中力矩，力矩撤掉的瞬间角速度只是被阻尼慢慢吃掉，滚转角会停在任意位置。',
+      motor: 'τ 是电机电磁力矩（N·m），经减速器作用到负载轴上。J 是折算转动惯量、b 是粘性摩擦与反电势的等效阻尼；k=0 表示没有回中力矩，但 b>0 使纯 P 控制即可无静差停住。',
+      tank: 'u 是入口流量（m³/h，归一化显示）。两级水箱串联，等效为 τ₁τ₂ÿ+(τ₁+τ₂)ẏ+y=Ku 的过阻尼二阶过程；ζ>1，物理上不会超调，难点是慢与纯滞后。',
+      pendulumDown: 'τ 是关节力矩（N·m）。摆杆自然下垂，重力矩 mgl·sinθ 是回复力（k>0），因此开环稳定；与倒立摆共用同一方程，只差 k 的符号。',
+      satellite: 'τ 是喷气推力器或反作用轮的力矩（N·m）。太空中没有气动回中力矩、结构阻尼极小，撤掉力矩后卫星会以恒定角速度一直转（角动量守恒）。',
+      uavAlt: 'ΔT 是相对悬停推力的增量（N）。悬停配平推力 mg 由对象层前馈提供，因此方程中没有重力项；关掉配平后重力会变成未建模常值扰动，纯 P 会留下高度静差。'
     };
     const inputNote = INPUT_NOTE[plant.id] || 'u 是施加到被控对象上的控制输入。';
 
@@ -203,7 +220,7 @@
       advancedBlock +=
         '<section class="model-block">' +
           '<h3><span>05</span> ' + esc(plant.teaching.title) + '</h3>' +
-          NS.math.md(plant.teaching.body) +
+          blockMd(plant.teaching.body) +
         '</section>';
     }
 
@@ -220,7 +237,7 @@
 
       '<section class="model-block">' +
         '<h3><span>01</span> 物理含义</h3>' +
-        '<div class="model-desc">' + NS.math.md(plant.desc) + '</div>' +
+        '<div class="model-desc">' + blockMd(plant.desc) + '</div>' +
       '</section>' +
 
       '<section class="model-block">' +
@@ -252,7 +269,14 @@
       '<section class="model-block">' +
         '<h3><span>04</span> 控制输入 u 施加在哪</h3>' +
         '<p>' + esc(inputNote) + '</p>' +
-      '</section>' + advancedBlock;
+      '</section>' +
+      (plant.doc
+        ? '<section class="model-block">' +
+            '<h3><span>05</span> 对象手册</h3>' +
+            '<p>这份对象的完整讲稿（方程推导、算例、工程陷阱与实测适用性）可在实验台内直接阅读。</p>' +
+            '<button type="button" class="btn btn-ghost" data-plant-doc="' + esc(plant.doc) + '">打开对象手册</button>' +
+          '</section>'
+        : '') + advancedBlock;
   }
 
   /* ── 控制器浏览器 ─────────────────────────────────── */
@@ -272,6 +296,9 @@
       D.sortedCategories.forEach((cat, catIndex) => {
         let items = D.groupedMethods[cat] || [];
         if (scope === 'favorites' || starFilter) items = items.filter((m) => favSet.has(m.key));
+        if (levelFilter && NS.methodMeta) {
+          items = items.filter((m) => NS.methodMeta.levelOf(m.key) === levelFilter);
+        }
         if (q) {
           items = items.filter((m) => (
             m.name.toLowerCase().indexOf(q) >= 0 ||
@@ -494,30 +521,39 @@
   }
 
   /* ── 控制器档案（公式使用标准 TeX） ───────────────── */
-  /* 三对象适用性徽章：来自开发期 159×3 审计（tools/build-fit.js） */
+  /* 六对象适用性徽章：来自 tools/build-fit.js 的 159×6×双模式审计。
+     倒立摆按当前「摆平衡辅助」开关选择辅助模式 / 真实模式评级。 */
   function fitBlock(key) {
-    const fit = NS.fitData && NS.fitData.verdicts && NS.fitData.verdicts[key];
-    if (!fit) return '';
-    const names = NS.fitData.plantNames || { msd: '质量-弹簧-阻尼', freeMass: '二阶积分器', pendulum: '倒立摆' };
-    const short = { msd: '弹簧', freeMass: '积分器', pendulum: '倒立摆' };
+    const data = NS.fitData;
+    if (!data || !data.verdicts || !data.verdicts[key]) return '';
+    const settings = sim.getSettings();
+    const current = settings.plantId;
+    const useReal = current === 'pendulum' && settings.balanceAssist === 'off';
+    const table = (useReal && data.realVerdicts) ? data.realVerdicts : data.verdicts;
+    const fit = table[key] || data.verdicts[key];
+    const names = data.plantNames || {};
+    const short = data.plantShort || {
+      freeMass: '积分器', msd: '弹簧', pendulum: '倒立摆',
+      aircraft: '飞机', missile: '导弹', uav: '四旋翼'
+    };
     const label = { good: '适用', fair: '一般', poor: '需调参', unfit: '不推荐' };
-    const current = sim.getSettings().plantId;
-    const chips = ['freeMass', 'msd', 'pendulum'].map((pid) => {
+    const order = (NS.data && NS.data.PLANT_LIST) || Object.keys(fit);
+    const modeKey = useReal ? 'real' : 'assist';
+    const chips = order.map((pid) => {
       const v = fit[pid] || 'fair';
-      const note = (NS.fitData.notes && NS.fitData.notes[pid + '|' + key]) || '';
-      const tip = names[pid] + '：' + (label[v] || v) + (note ? ' · ' + note : '');
+      const note = (data.notes && data.notes[modeKey + '|' + pid + '|' + key]) || '';
+      const tip = (names[pid] || pid) + '：' + (label[v] || v) + (note ? ' · ' + note : '');
       return '<button type="button" class="fit-chip is-' + v + (pid === current ? ' is-current' : '') +
         '" data-fit-plant="' + pid + '" title="' + esc(tip) + '">' +
-        esc(short[pid] || names[pid]) + '<b>' + (label[v] || v) + '</b></button>';
+        esc(short[pid] || names[pid] || pid) + '<b>' + (label[v] || v) + '</b></button>';
     }).join('');
     const warn = fit[current] === 'unfit'
       ? '<p class="fit-warn">该对象下默认参数不收敛：建议按徽章切换到推荐对象，或先降低增益并增加阻尼。</p>'
       : '';
-    /* 姿态对象无审计数据：如实说明覆盖范围，并按同构关系指引参照对象，不编造评级 */
-    const attitudeNote = ['freeMass', 'msd', 'pendulum'].indexOf(current) < 0
-      ? '<p class="track-hint fit-note">适用性评级仅覆盖经典三对象。姿态通道与二阶模型同构：飞机≈弹簧对象、导弹≈倒立摆、四旋翼≈积分器，可参照对应徽章并以实测为准。</p>'
+    const modeNote = current === 'pendulum'
+      ? '<p class="track-hint fit-note">当前评级模式：' + (useReal ? '真实动力学（辅助关闭）' : '教学稳定（辅助 PI 开启）') + '。</p>'
       : '';
-    return '<div class="fit-row"><span class="fit-label">适用对象</span>' + chips + '</div>' + warn + attitudeNote;
+    return '<div class="fit-row"><span class="fit-label">适用对象</span>' + chips + '</div>' + warn + modeNote;
   }
 
   /* 控制律宽度自适应：宁可缩小字号，也不把公式折成两行。
@@ -644,11 +680,11 @@
       '</figure>' +
       (conf.detail ? '<details class="profile-block"><summary>' +
         '<span class="fold-box">' + icon('chevron') + '</span>' +
-        '<span>参数意义与底层机理</span></summary>' + NS.math.md(conf.detail) + '</details>' : '') +
+        '<span>参数意义与底层机理</span></summary>' + blockMd(conf.detail) + '</details>' : '') +
       (conf.tuning ? '<details class="profile-block"><summary>' +
         '<span class="fold-box">' + icon('chevron') + '</span>' +
         '<span class="tuning-tag">调参指引</span></summary>' +
-        '<div class="profile-tuning"><span class="tuning-text">' + NS.math.md(conf.tuning) + '</span></div></details>' : '') +
+        '<div class="profile-tuning"><span class="tuning-text">' + blockMd(conf.tuning) + '</span></div></details>' : '') +
       paperBlock(key) +
       '</div>';
 
@@ -704,6 +740,8 @@
     const plantParams = sim.getPlantParams();
     let html = '';
     D.PARAM_SECTIONS.forEach((section, idx) => {
+      /* 新手模式：隐藏硬件非理想项，先让学生把基础闭环跑通 */
+      if (beginnerMode && section.id === 'hardware') return;
       /* 小车位置外环只对倒立摆有意义 */
       if (section.id === 'cart' && plant.id !== 'pendulum') return;
       let items;
@@ -766,6 +804,9 @@
           '<button type="button" class="btn btn-ghost solve-doc-btn" id="btn-solve-doc"' +
           (solvedGainMethods[settings.method] ? '' : ' hidden') + '>' +
           icon('book') + '求解原理 · 教学文档</button>' +
+          '<button type="button" class="btn btn-ghost solve-doc-btn" id="btn-undo-solve"' +
+          (solveUndoAvailable ? '' : ' hidden') + ' title="恢复求解前的整组增益（Ctrl+Z）">' +
+          icon('refresh') + '撤销求解</button>' +
           '</div>'
         : '';
       html += '<details class="param-group"' + (idx < 2 ? ' open' : '') + '>' +
@@ -811,11 +852,28 @@
     set('m-energy-dyn', clean(m.energyDyn || 0, 1));
     set('m-hold', clean(m.holdForce || 0, 2));
     set('m-os', clean(m.overshoot || 0, 1));
-    set('m-ts', (m.settle === undefined || m.settle === null) ? '—' : Number(m.settle).toFixed(2));
+    set('m-ts', (m.settle === undefined || m.settle === null)
+      ? (m.t > 0.2 ? '未收敛' : '—')
+      : Number(m.settle).toFixed(2));
     const pos = $('chart-metric-pos');
     if (pos) pos.textContent = 'RMSE ' + clean(m.rmse * k, dg) + (view && view.deg ? '°' : '') + (m.frozen ? ' · 定格' : '');
     const ctrl = $('chart-metric-ctrl');
     if (ctrl) ctrl.textContent = 'E ' + clean(m.energy || 0, 1) + ' J / E₍dyn₎ ' + clean(m.energyDyn || 0, 1) + ' J';
+    /* 收敛 / 振荡 / 饱和 / 发散状态徽章 */
+    const badge = $('status-quality');
+    if (badge) {
+      const s = sim.getSettings();
+      const scale = Math.max(0.1, Math.abs(m.target || 1));
+      let state = '调节中', cls = 'is-run';
+      if (!Number.isFinite(m.x) || Math.abs(m.x) > 1e4) { state = '发散'; cls = 'is-bad'; }
+      else if (Math.abs(m.e) <= Math.max(0.01, 0.02 * scale) && Math.abs(m.v) <= 0.05) { state = '已收敛'; cls = 'is-good'; }
+      else if (Math.abs(m.u) >= (s.actuatorLimit || 200) * 0.98) { state = '执行器饱和'; cls = 'is-warn'; }
+      else if ((m.chatter || 0) > 2 || Math.abs(m.e) > 0.25 * scale) { state = '振荡 / 大偏差'; cls = 'is-warn'; }
+      badge.hidden = !s.running && m.t === 0;
+      badge.className = 'status-item quality-item ' + cls;
+      const qtext = $('quality-text');
+      if (qtext) qtext.textContent = state;
+    }
   }
 
   function updateStatus(info) {
@@ -917,6 +975,40 @@
         NS.math.renderMixed(it.desc) + '</p></div></div>').join('') + '</section>').join('');
   }
 
+  /* 预设的“应该看到什么”：一行判读提示，避免学生只点不看 */
+  const PRESET_EXPECT = {
+    'pid-baseline': '先看 P 的快与超调；加 D 后振荡收敛；最后加 I 让静差消失。',
+    'steady-error': 'P 会停在目标前（约 4.8 m）；切 PI / LQR-I 后贴到 5.0 m。',
+    disturbance: '扰动瞬间偏离，SMC / ADRC 在 1 s 内拉回；纯 P 恢复明显更慢。',
+    'noisy-sensor': '纯微分控制量毛刺大；LQG 平滑但相位略滞后。',
+    'weak-actuator': '控制量贴顶；观察积分饱和导致的超调与恢复变慢。',
+    tracking: 'PID 跟踪正弦有相位滞后；预见 / PR 控制的滞后更小。',
+    'finite-time': '误差在预设时间内进入零邻域，并在之后保持。',
+    adrc: '扰动被 ESO 估计并补偿，恢复过程几乎没有静差。',
+    'double-integrator': 'P 等幅振荡；PD 后振荡衰减；相轨迹从环绕变为收敛。',
+    'inverted-pendulum': '关闭辅助时开环必倒；状态反馈把摆拉回竖直。',
+    'cart-position-pid': '摆角稳定的同时小车移动到目标；外环饱和时观察限幅。',
+    'cart-position-smc': '外环给倾角指令、内环滑模跟踪；看小车是否到位。',
+    'aircraft-pitch-pid': '静稳定对象：P 有配平静差，PID 消静差。',
+    'aircraft-trim-static': 'k 越大，纯 P 的静差越大；用积分或前馈消除。',
+    'missile-openloop': '不控必翻，角度会冲出画面。',
+    'missile-pitch-sf': '状态反馈把右半平面极点拉回，发散变收敛。',
+    'uav-roll-p': '阻尼比很低，长时间来回摆动。',
+    'uav-roll-pd': '加 D 注入电子阻尼，摆动迅速衰减。',
+    'smc-chatter-raw': '看指标卡第二行：纹波 σu 与切换 n/s 都很高。',
+    'smc-chatter-smooth': '边界层把纹波幅值与切换频率显著压低。',
+    'motor-p': '纯 P 就能停在 68° 且无静差，只是到位较慢；与二阶积分器对比最明显。',
+    'motor-sat': '力矩先顶到 3 N·m，误差反向后出现超调，恢复时间变长。',
+    'tank-pi': '液位单调上升、无超调；P 会留静差，PI 才贴到 0.60 m。',
+    'tank-delay': '滞后 1.2 s 后 PID 增益一高就振荡；SmithPredict 明显更稳。',
+    'pendulum-down-free': '无控制时摆长时间来回摆，幅值衰减很慢（ζ≈0.036）。',
+    'pendulum-down-pd': '约 1.2 s 停到 17°；保持力矩约 1.16 N·m 是重力矩。',
+    'sat-timeoptimal': '先加速后减速，约 1.3 s 到位，开关次数少、纹波低。',
+    'sat-lqr': '平滑机动、无超调，到位比时间最优慢，但纹波更小。',
+    'uav-alt-pid': '高度平滑爬到 2 m，推力增量先正后负，末段回到 0。',
+    'uav-alt-trim-loss': '缺配平时纯 P 停在约 1.70 m；切 PI 后回到 2.00 m。'
+  };
+
   function renderPresets() {
     const host = $('presets-body');
     if (!host) return;
@@ -931,7 +1023,9 @@
       const plantName = p.plant && D.PLANTS[p.plant] ? D.PLANTS[p.plant].name : '二阶积分器';
       return '<button type="button" class="preset-card" data-preset="' + esc(p.id) + '">' +
         '<span class="preset-tag">' + esc(p.tag) + '</span><strong>' + esc(p.title) + '</strong>' +
-        '<p>' + esc(p.desc) + '</p><span class="preset-meta">' + esc(D.CONTROLLER_CONFIGS[p.method].name) +
+        '<p>' + esc(p.desc) + '</p>' +
+        (PRESET_EXPECT[p.id] ? '<p class="preset-expect">预期：' + esc(PRESET_EXPECT[p.id]) + '</p>' : '') +
+        '<span class="preset-meta">' + esc(D.CONTROLLER_CONFIGS[p.method].name) +
         ' · ' + esc(plantName) + '</span></button>';
     }).join('') + '</div>' +
       '<h3 class="preset-section-title">经典对决 · 一键双法同屏竞技</h3>' +
@@ -941,6 +1035,44 @@
       '<div class="preset-grid">' + duelCards + '</div>';
   }
 
+  /* ── 学习路线（8 站）与进度 ───────────────────────── */
+  const LEARN_KEY = 'ctrlsim.v5.path';
+  function loadLearnProgress() {
+    try {
+      const arr = JSON.parse(global.localStorage.getItem(LEARN_KEY) || '[]');
+      return Array.isArray(arr) ? arr : [];
+    } catch (err) { return []; }
+  }
+  function saveLearnProgress(arr) {
+    try { global.localStorage.setItem(LEARN_KEY, JSON.stringify(arr)); } catch (err) { /* file:// 限制时忽略 */ }
+  }
+  function renderLearnPath() {
+    const host = $('learn-body');
+    if (!host) return;
+    const path = NS.learningPath || [];
+    const done = loadLearnProgress();
+    const cards = path.map((s, i) => {
+      const isDone = done.indexOf(s.id) >= 0;
+      const methods = s.methods.map((k) =>
+        '<button type="button" class="text-btn" data-learn-doc="' + esc(k) + '">' +
+        esc((D.CONTROLLER_CONFIGS[k] || {}).name || k) + '</button>').join('、');
+      return '<article class="learn-card' + (isDone ? ' is-done' : '') + '" data-station="' + esc(s.id) + '">' +
+        '<h3><span class="learn-no">' + (i + 1) + '</span>' + esc(s.title) + '</h3>' +
+        '<span class="learn-tag">' + esc((NS.methodMeta && NS.methodMeta.LEVEL_NAME[s.level]) || '') + '</span>' +
+        '<p><strong>目标：</strong>' + esc(s.goal) + '</p>' +
+        '<p><strong>方法：</strong>' + methods + '</p>' +
+        '<p><strong>判读：</strong>' + esc(s.observe) + '</p>' +
+        '<p class="learn-check"><strong>自检：</strong>' + esc(s.check) + '</p>' +
+        '<div class="learn-actions">' +
+          '<button type="button" class="btn btn-primary" data-learn-run="' + esc(s.preset || '') + '">开始实验</button>' +
+          '<button type="button" class="btn btn-ghost" data-learn-done="' + esc(s.id) + '">' +
+          (isDone ? '取消完成' : '标记完成') + '</button>' +
+        '</div></article>';
+    }).join('');
+    host.innerHTML = '<p class="learn-progress">已完成 ' + done.length + ' / ' + path.length + ' 站' +
+      (done.length ? ' · 进度保存在本机浏览器' : '') + '</p><div class="learn-list">' + cards + '</div>';
+  }
+
   function renderHelp() {
     const host = $('help-body');
     if (!host) return;
@@ -948,11 +1080,12 @@
       ['空格', '启动 / 暂停仿真'], ['→', '单步推进（暂停时可用）'],
       ['R', '重置仿真'], ['D', '施加脉冲扰动'],         ['1 / 2 / 4', '快捷设为 1× / 2× / 4×'],
       ['仿真速度滑块', '对数刻度 0.1×~10×；点击「仿真速度」恢复默认 1×'],
-      ['O', '一键求解当前方法的最优增益'],
+      ['O', '一键求解当前方法的最优增益'], ['Ctrl+Z', '撤销一键求解，恢复求解前参数'],
       ['/', '聚焦左栏方法搜索'],
       ['H', '打开当前方法教学文档'], ['M', '打开被控对象模型与符号参数'],
       ['F', '专注模式（挂起 / 展开两侧栏）'], ['S', '复制实验参数链接'], ['E', '导出 CSV 数据'],
       ['G', '打开符号术语词典'], ['P', '打开场景预设'], ['A', '打开 / 收起智能助手'],
+      ['L', '打开 8 站学习路线'],
       ['?', '打开本帮助'], ['Esc', '关闭浮层']
     ];
     host.innerHTML =
@@ -962,7 +1095,8 @@
       '<li>点「方程与符号」或按 M，在弹窗里看当前对象的动力学方程、物理含义、全部符号的当前取值、等效二阶参数与控制输入的施加位置。</li>' +
       '<li>右侧分组调节控制律增益、目标轨迹、硬件非理想条件与对象参数；控制律公式卡会同步显示本方法的 TeX 方程。</li>' +
       '<li>中间四张曲线（倒立摆为五张）带完整自适应坐标轴（nice 刻度、轴标题与单位），鼠标悬停可读精确数值；<strong>点击任意曲线卡</strong>可全屏高清放大检视。</li>' +
-      '<li>右侧增益组顶部的<strong>「一键最优增益求解」</strong>（或按 O）会以「理论最优种子 + 多尺度坐标模式搜索」在当前对象与扰动条件下最小化 ITAE + ISE + 超调 + 能耗泛函，自动写回该方法的增益。</li>' +
+      '<li>右侧增益组顶部的<strong>「一键最优增益求解」</strong>（或按 O）会以「理论最优种子 + 多尺度坐标模式搜索」在当前对象与扰动条件下最小化 ITAE + ISE + 超调 + 能耗泛函，自动写回该方法的增益。<strong>若当前对象/工况下不存在满足收敛要求的增益，会拒绝写回并提示更换方法</strong>；求解后可点「撤销求解」或按 <kbd>Ctrl+Z</kbd> 恢复求解前参数。</li>' +
+      '<li>倒立摆的<strong>「摆平衡辅助」</strong>是一个显式辅助 PI 控制器（默认开启，与主控制器共用同一执行器）：它让任意方法都能稳住摆、专注演示各自特性；关闭后回到真实不稳定动力学。外扰、执行器限幅与死区对辅助通道同样生效。</li>' +
       '<li>开启「A/B 对比」后切换控制器，可把多次实验曲线叠加在同一坐标系中比较；场景预设里的<strong>经典对决</strong>可一键让两种流派各跑一段并同屏对比。</li>' +
       '<li>移动端为精简布局：脉冲扰动、场景预设、对象模型弹窗与仿真指南为桌面端功能。</li></ul></section>' +
       '<section class="help-section"><h3>为什么到达目标后能耗还在增加？</h3><p>' +
@@ -1119,6 +1253,12 @@
     on('btn-disturb', 'click', () => cb.disturb && cb.disturb());
     on('btn-reset', 'click', () => cb.reset && cb.reset());
     on('btn-reset-params', 'click', () => cb.resetParams && cb.resetParams());
+    on('btn-beginner', 'click', () => setBeginnerMode(!beginnerMode));
+    const beginnerBtn = $('btn-beginner');
+    if (beginnerBtn) {
+      beginnerBtn.classList.toggle('is-active', beginnerMode);
+      beginnerBtn.setAttribute('aria-pressed', String(beginnerMode));
+    }
     on('btn-rerecord', 'click', () => cb.rerecord && cb.rerecord());
     on('btn-compare', 'click', () => cb.toggleCompare && cb.toggleCompare());
     on('btn-share', 'click', () => cb.share && cb.share());
@@ -1126,13 +1266,66 @@
     on('btn-theme', 'click', () => cb.toggleTheme && cb.toggleTheme());
     on('btn-help', 'click', () => openOverlayById('overlay-help'));
     on('btn-glossary', 'click', () => openOverlayById('overlay-glossary'));
+    on('btn-learn', 'click', () => { renderLearnPath(); openOverlayById('overlay-learn'); });
+    const levels = $('browser-levels');
+    if (levels) levels.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-level]');
+      if (!btn) return;
+      levelFilter = Number(btn.dataset.level) || 0;
+      levels.querySelectorAll('.level-chip').forEach((x) => {
+        const active = x === btn;
+        x.classList.toggle('is-active', active);
+        x.setAttribute('aria-pressed', String(active));
+      });
+      renderBrowser();
+    });
+    const learnBody = $('learn-body');
+    if (learnBody) learnBody.addEventListener('click', (ev) => {
+      const run = ev.target.closest('[data-learn-run]');
+      if (run) {
+        if (run.dataset.learnRun && cb.applyPreset) cb.applyPreset(run.dataset.learnRun);
+        closeOverlay('overlay-learn');
+        return;
+      }
+      const docBtn = ev.target.closest('[data-learn-doc]');
+      if (docBtn && NS.docs && NS.docs.open) { NS.docs.open(docBtn.dataset.learnDoc); return; }
+      const done = ev.target.closest('[data-learn-done]');
+      if (done) {
+        const arr = loadLearnProgress();
+        const i = arr.indexOf(done.dataset.learnDone);
+        if (i >= 0) arr.splice(i, 1); else arr.push(done.dataset.learnDone);
+        saveLearnProgress(arr);
+        renderLearnPath();
+      }
+    });
     on('btn-presets', 'click', () => openOverlayById('overlay-presets'));
     on('btn-plant-model', 'click', () => { renderPlantModel(); openOverlayById('overlay-plant'); });
+    /* 对象手册入口：弹窗由 renderPlantModel 动态重建，故用事件委托 */
+    doc.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-plant-doc]');
+      if (!btn) return;
+      if (NS.docs && NS.docs.openPlant) NS.docs.openPlant(btn.dataset.plantDoc || btn.getAttribute('data-plant-doc'));
+    });
     on('plant-select', 'change', (ev) => cb.selectPlant && cb.selectPlant(ev.target.value));
     on('btn-guide-start', 'click', () => {
       const noMore = $('guide-no-more');
       cb.dismissGuide && cb.dismissGuide(noMore ? noMore.checked : false);
       closeOverlay('overlay-guide');
+    });
+    /* 欢迎引导三格：点击直接进入对应动作，而不只是文字说明 */
+    doc.querySelectorAll('[data-guide-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.guideAction;
+        closeOverlay('overlay-guide');
+        if (action === 'browse') {
+          const box = $('browser-search');
+          if (box) box.focus();
+        } else if (action === 'docs') {
+          if (NS.docs && NS.docs.open) NS.docs.open(activeMethod);
+        } else if (action === 'presets') {
+          openOverlayById('overlay-presets');
+        }
+      });
     });
 
     doc.querySelectorAll('[data-close]').forEach((el) => {
@@ -1205,6 +1398,11 @@
         }
         if (ev.target.closest('#btn-solve-doc')) {
           if (cb.openSolveGuide) cb.openSolveGuide();
+          return;
+        }
+        if (ev.target.closest('#btn-undo-solve')) {
+          if (cb.undoSolve) cb.undoSolve();
+          return;
         }
       });
       groups.addEventListener('input', (ev) => {
@@ -1373,10 +1571,29 @@
     renderParams();
   }
 
+  /* 新手模式：隐藏硬件非理想项；状态持久化到本机 */
+  function setBeginnerMode(on) {
+    beginnerMode = !!on;
+    try { global.localStorage.setItem('ctrlsim.v5.beginner', beginnerMode ? '1' : '0'); } catch (err) { /* 忽略 */ }
+    const btn = $('btn-beginner');
+    if (btn) {
+      btn.classList.toggle('is-active', beginnerMode);
+      btn.setAttribute('aria-pressed', String(beginnerMode));
+    }
+    renderParams();
+  }
+
+  /* 显示 / 隐藏「撤销求解」按钮（由编排层在求解、撤销、切换时调用） */
+  function setSolveUndo(available) {
+    solveUndoAvailable = !!available;
+    const btn = doc.getElementById('btn-undo-solve');
+    if (btn) btn.hidden = !solveUndoAvailable;
+  }
+
   NS.ui = {
     init, setFavorites, getFavorites, setRecent, setScope, syncColumnHeights,
     setActiveMethod, renderBrowser, renderProfile, renderPlant, renderPlantModel, renderParams,
-    renderLegend, renderTracks, updateMetrics, updateStatus, markSolved,
+    renderLegend, renderTracks, updateMetrics, updateStatus, markSolved, setSolveUndo, renderLearnPath,
     openOverlay, openOverlayById, closeOverlay, closeAllOverlays,
     trapFocus, releaseFocusTrap,
     setTheme, toast, syncParamControl

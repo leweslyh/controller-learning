@@ -17,6 +17,12 @@
   const MAX_POINTS = 2500;
   const MAX_TRACKS = 6;
   const TRACK_COLORS = ['#2563EB', '#EA580C', '#7C3AED', '#059669', '#DC2626', '#0891B2'];
+  /* 倒立摆「教学稳定模式」的辅助控制器参数：固定增益，不再随控制量 |F| 变化。
+     辅助控制器与主控制律共用同一执行器，先相加再过限幅/死区/滞后，
+     因此外扰、饱和、死区对它同样生效（V5.1 修复 E-01/E-02）。
+     PI 结构（P + I）用于抵消主控制器内模失配造成的常值偏置。 */
+  const ASSIST_FB = 10.0;
+  const ASSIST_KI = 6.0;
 
   /* ── 与 V2.1 的 useRef 等价的容器（保留 *.current 访问形态） ── */
   const stateRef = { current: { x: 0, v: 0, t: 0, alg: {} } };
@@ -84,7 +90,8 @@
                     spsa_kp: 38,
                     spsa_j_prev: 0,
                     u_lag_prev: 0,
-                    v_inc_prev: 0
+                    v_inc_prev: 0,
+                    assist_int: 0
             });
 
             const resetAlgState = (methodName, currTarget = 5.0) => {
@@ -147,6 +154,9 @@
             const calculateControlOutput = (dt, x, v, target, pP, cP, alg, currentMethod, currTime) => {
                 const e = target - x;
                 let u = 0;
+                /* 开关/继电类方法的切换幅值按对象限幅缩放：
+                   姿态对象（uav 限幅 20 N·m）不能沿用为 200 N 对象整定的 25/30。 */
+                const swAmp = (f) => Math.min(Math.abs(f), 0.6 * (loopStateRef.current.actuatorLimit || 200));
                 let target_changed = false;
                 if (Math.abs(target - alg.last_target) > 0.01) {
                     alg.last_target = target; alg.t_target = 0; alg.xd = x; alg.vd = v; alg.ilc_idx = 0;
@@ -227,9 +237,11 @@
                     u = cP.kp * e + cP.ki * alg.integral + alg.d_filt; break;
                 }
                     case 'Deadband-PID': {
-                    const e_db = Math.abs(e) <= cP.db_width ? 0 : (e - Math.sign(e) * cP.db_width);
+                    const pvDb = D.PLANT_VIEWS[loopStateRef.current.plantId] || { min: -2, max: 12 };
+                    const dbEff = cP.db_width * ((pvDb.max - pvDb.min) / 12);
+                    const e_db = Math.abs(e) <= dbEff ? 0 : (e - Math.sign(e) * dbEff);
                     alg.integral = clamp(alg.integral + e_db * dt, -50, 50);
-                    u = cP.kp * e_db + cP.ki * alg.integral - (Math.abs(e) <= cP.db_width ? 0.3 : 1.0) * cP.kd * v; break;
+                    u = cP.kp * e_db + cP.ki * alg.integral - (Math.abs(e) <= dbEff ? 0.3 : 1.0) * cP.kd * v; break;
                 }
                     case 'RampSP-PID': {
                     const diff_r = target - alg.r_soft;
@@ -315,7 +327,7 @@
                     const lam = Math.max(0.05, cP.lambda_c);
                     const kp_imc = (pP.c + 2 * pP.m / lam) / lam;
                     const kd_imc = pP.m / lam;
-                    const ki_imc = (pP.k / lam) * cP.ki_trim + 6.0;
+                    const ki_imc = Math.max(0, (pP.k / lam) * cP.ki_trim) + 6.0;
                     alg.integral = clamp(alg.integral + e * dt, -50, 50);
                     u = kp_imc * e + ki_imc * alg.integral - kd_imc * v; break;
                 }
@@ -397,7 +409,13 @@
                     case 'LQG': {
                         const y_meas = x + 0.1 * gaussNoise();
                         const a_kf = (alg.u_prev - pP.k * alg.x_kf - pP.c * alg.v_kf) / pP.m;
-                        alg.x_kf += alg.v_kf * dt + 0.3 * (y_meas - alg.x_kf); alg.v_kf += a_kf * dt + 0.1 * (y_meas - alg.x_kf);
+                        /* 观测器带宽随对象不稳定程度自适应：固定 0.3/0.1 的增益
+                           在 k<0 的倒立摆上跟不上发散模态（E-08）。 */
+                        const wo_kf = clamp(6 + 2.4 * Math.sqrt(Math.abs(pP.k) / Math.max(0.05, pP.m)), 6, 26);
+                        const a1_kf = clamp(2 * wo_kf * dt, 0.08, 0.85);
+                        const a2_kf = clamp(wo_kf * wo_kf * dt * dt, 0.01, 0.6);
+                        alg.x_kf += alg.v_kf * dt + a1_kf * (y_meas - alg.x_kf);
+                        alg.v_kf += a_kf * dt + (a2_kf / dt) * (y_meas - alg.x_kf);
                         const lqg_kp = Math.sqrt(cP.q_x / cP.r_w); const lqg_kd = Math.sqrt(cP.q_v / cP.r_w + 2 * pP.m * lqg_kp);
                         u = lqg_kp * (target - alg.x_kf) - lqg_kd * alg.v_kf + pP.k * target; break;
                     }
@@ -530,7 +548,10 @@
                     alg.xm = x_nom_next + 2.5 * (x - alg.xm) * dt;
                     const x_free = alg.xm + alg.vm * cP.t_pred - H * (pP.c * alg.vm + pP.k * alg.xm);
                     const u_mpc_star = (H * (target - x_free) + cP.lambda * pP.k * target) / (H * H + cP.lambda);
-                    u = u_mpc_star + cP.k_anc * (alg.xm - x) - 12 * (v - alg.vm);
+                    /* 辅助镇定增益按等效惯量缩放：原实现把 -12 写死，按 m≈2 的对象标定；
+                       小惯量对象（下垂单摆 J=0.32）上这一项会把控制力放大一个数量级。 */
+                    const mScaleT = Math.max(0.2, Math.min(3.0, pP.m / 2.0));
+                    u = u_mpc_star + cP.k_anc * (alg.xm - x) - 12 * mScaleT * (v - alg.vm);
                     alg.ref_display = alg.xm; break;
                 }
                     case 'GPC': {
@@ -756,13 +777,13 @@
 
                 // === 08. 非线性几何与能量控制 ===
                     // === 【8. 非线性几何与能量控制】 ===
-                    case 'BangBang': u = (Math.abs(e) < 0.05 && Math.abs(v) < 0.05) ? 0 : (e > 0 ? cP.force : -cP.force); break;
-                    case 'BangBang-Zone': u = Math.abs(e) > cP.zone ? (Math.sign(e) * cP.force) : (cP.kp * e - 20 * v + pP.k * target); break;
-                    case 'Relay': if (e > cP.deadzone) u = cP.force; else if (e < -cP.deadzone) u = -cP.force; else u = alg.u_prev; break;
+                    case 'BangBang': u = (Math.abs(e) < 0.05 && Math.abs(v) < 0.05) ? 0 : (e > 0 ? swAmp(cP.force) : -swAmp(cP.force)); break;
+                    case 'BangBang-Zone': u = Math.abs(e) > cP.zone ? (Math.sign(e) * swAmp(cP.force)) : (cP.kp * e - 20 * v + pP.k * target); break;
+                    case 'Relay': if (e > cP.deadzone) u = swAmp(cP.force); else if (e < -cP.deadzone) u = -swAmp(cP.force); else u = alg.u_prev; break;
                     case 'TimeOptimal': {
-                    const a_max = cP.force / pP.m;
+                    const a_max = swAmp(cP.force) / pP.m;
                     const sig = e - Math.sign(v) * (v * v) / (2 * a_max);
-                    u = (Math.abs(e) < 0.25 && Math.abs(v) < 0.6) ? (pP.k * target + 35 * e - 18 * v) : (sig > 0 ? cP.force : -cP.force); break;
+                    u = (Math.abs(e) < 0.25 && Math.abs(v) < 0.6) ? (pP.k * target + 35 * e - 18 * v) : (sig > 0 ? swAmp(cP.force) : -swAmp(cP.force)); break;
                 }
                     case 'FeedbackLin': u = pP.m * (cP.kp * e - cP.kd * v) + pP.c * v + pP.k * x; break;
                     case 'Backstepping': {
@@ -852,7 +873,7 @@
                     case 'I-and-I': {
                     const d_hat_ii = alg.theta_hat_ii - cP.lambda * pP.m * v;
                     const z_dot_ii = -cP.lambda * d_hat_ii + cP.lambda * (alg.u_prev - pP.k * x - pP.c * v);
-                    alg.theta_hat_ii = clamp(alg.theta_hat_ii + z_dot_ii * dt, -150, 150);
+                    alg.theta_hat_ii = clamp(alg.theta_hat_ii + (cP.gamma / 10) * z_dot_ii * dt, -150, 150);
                     u = cP.kp * e - cP.kd * v + d_hat_ii; break;
                 }
                     case 'AdaptBackstepping': {
@@ -1295,6 +1316,22 @@ default: u = 0;
                     state.alg.sw_rate = prevRate + alpha * (swDelta / DT - prevRate);
                 }
 
+                /* 教学稳定模式：显式辅助控制器（倒立摆专用）。
+                   与主控制律共用执行器：先相加、再统一过限幅/死区/滞后，
+                   因此外扰、执行器饱和与死区对辅助通道同样生效。
+                   辅助增益固定（不随 |F| 变化），被控对象因此保持良定义。 */
+                if (plant.id === 'pendulum' && settings.balanceAssist !== 'off') {
+                    const eA = state.x - activeTarget;
+                    const kA = 1.65 * ASSIST_FB * pplant.M * D.GRAVITY;
+                    const cA = (3.2 + 0.5 * pplant.c) * pplant.M * pplant.l;
+                    const kI = ASSIST_KI * pplant.M * D.GRAVITY;
+                    const limA = settings.actuatorLimit || 200;
+                    /* 积分项带限幅，避免主控制器长期饱和时无限蓄能 */
+                    state.alg.assist_int = clamp((state.alg.assist_int || 0) + eA * DT, -6, 6);
+                    const aux = -(kA * eA + cA * state.v + kI * state.alg.assist_int);
+                    u = Math.max(-limA, Math.min(limA, u + aux));
+                }
+
                 state.alg.u_hw_buffer.unshift(u);
                 if (state.alg.u_hw_buffer.length > 100) state.alg.u_hw_buffer.pop();
 
@@ -1309,7 +1346,10 @@ default: u = 0;
 
                 const F_actual = inputSign * u_actual;
                 lastU = F_actual;
-                let ext_f = contDisturbance;
+                /* 持续扰动按对象量纲缩放：姿态通道是 N·m，uav 限幅仅 20 N·m，
+                   不能把 25 N 的滑条值原样当作 25 N·m 施加。 */
+                const dScale = typeof plant.disturbanceScale === 'number' ? plant.disturbanceScale : 1;
+                let ext_f = contDisturbance * dScale;
                 if (impulseRef.current > 0) {
                     ext_f += impulseRef.current;
                     impulseRef.current *= 0.8;
@@ -1332,22 +1372,12 @@ default: u = 0;
 
                 /* 真实执行器推力：控制量 u 与推力 F 反号（u 正使摆角增大，F 正把摆角推回） */
                 if (plant.id === 'pendulum') {
-                    /* 摆杆转动与小车平动联立：θ̈、ẍ_c 同时积分，小车会真实移动 */
-                    const M = pplant.M, mm = pplant.m, ll = pplant.l, cc = pplant.c;
-                    let thDD;
-                    if (settings.balanceAssist !== 'off') {
-                        /* 摆平衡辅助（默认开启，与 index(14).html 同款「隐藏 PD」）：
-                           摆角由内置 PD 主导稳定，控制力只以 18% 强度经小车加速度弱耦合作用于摆，
-                           使 P/PI/开环乃至对 k<0 不适配的预测类方法都能稳住摆、专注演示各自特性；
-                           关闭后回到真实不稳定拉格朗日动力学。 */
-                        const g = D.GRAVITY;
-                        const fb = Math.min(4.5, Math.max(1.0, Math.abs(F_actual) / (mm * 8.0) + 1.2));
-                        const damp = 3.2 + 0.5 * cc;
-                        thDD = (g / ll) * state.x - (cc * state.v) / (M * ll)
-                             - ((g / ll) * 1.65 * fb * state.x + damp * state.v);
-                    } else {
-                        thDD = ((M + mm) * D.GRAVITY * state.x - cc * state.v - F_actual) / (M * ll);
-                    }
+                    /* 摆杆转动与小车平动联立：θ̈、ẍ_c 同时积分，小车会真实移动。
+                       摆角动力学统一复用对象声明的 accel()，外部扰动与库仑摩擦
+                       因此进入摆角方程（V5.1 修复 E-01）。教学稳定模式的辅助
+                       量已在上方并入控制指令，不再改写对象方程（E-02）。 */
+                    const M = pplant.M, mm = pplant.m, ll = pplant.l;
+                    const thDD = plant.accel(state, -F_actual, ext_f, friction_force, pplant);
                     let xDD = (F_actual - mm * ll * thDD) / (M + mm);
                     if (settings.balanceAssist !== 'off') {
                         /* 教学简化：小车位置 / 速度软回中，避免「只控摆角」时小车无限漂出画面 */
@@ -1478,6 +1508,25 @@ default: u = 0;
     return Number(clamp(snapped, minV, maxV).toFixed(4));
   }
 
+  /* 30 s 长轨迹复核：与真实仿真走同一套 updatePhysics，取末段 2 s 的
+     均值误差 / 标准差判断是否真正收敛（E-03：短视界会把持续振荡误判为收敛）。 */
+  function evaluateCandidate(method, cand) {
+    const tail = [];
+    const shadow = withShadowRollout(method, cand, 1500, (st) => {
+      if (st.t >= 28) tail.push(st.x);
+    });
+    const base = settings.physParams.target;
+    const mean = tail.length ? tail.reduce((a, b) => a + b, 0) / tail.length : shadow.x;
+    const sd = tail.length
+      ? Math.sqrt(tail.reduce((a, b) => a + (b - mean) * (b - mean), 0) / tail.length) : 0;
+    return {
+      err: Math.abs(base - mean),
+      sd,
+      overshoot: shadow.alg.max_overshoot || 0,
+      finalError: Math.abs(base - shadow.x)
+    };
+  }
+
   function optimizeGains(method, startParams) {
     const target = method || settings.method;
     const conf = D.CONTROLLER_CONFIGS[target];
@@ -1490,6 +1539,7 @@ default: u = 0;
     const pP = { ...settings.physParams, m: eff.m, c: eff.c, k: eff.k };
     const cfg = {
       plantType: plant.id === 'pendulum' ? 'pendulum' : 'slider',
+      wnScale: plant.wnScale || 1,
       contDisturbance: settings.contDisturbance || 0,
       coulombFriction: settings.coulombFriction || 0,
       plantDelay: settings.plantDelay || 0,
@@ -1542,7 +1592,49 @@ default: u = 0;
     }
 
     const improvePct = initCost > 1e-4 ? Math.max(0, (initCost - bestCost) / initCost * 100) : 0;
-    return { params: best, improvePct, cost: bestCost, ruleName };
+    /* 退化解守卫：全部数值参数为 0、或关键比例增益为 0，一律不作为候选。
+       这类解在代价泛函上可能“更优”，但物理上等于放弃控制（E-03）。 */
+    const numericKeys = Object.keys(conf.params).filter((k) => typeof best[k] === 'number');
+    const primaryKeys = ['kp', 'k_p', 'k_pp', 'kp0', 'kp_base', 'kp_n', 'kp_init', 'K']
+      .filter((k) => typeof best[k] === 'number');
+    const integralKeys = ['ki', 'ki_in', 'ki_trim', 'ki_h2', 'k_i', 'ki1', 'ki2', 'ki_base']
+      .filter((k) => typeof best[k] === 'number');
+    const isDegenerate = (cand) => {
+      if (!cand) return true;
+      const nk = numericKeys.filter((k) => typeof cand[k] === 'number');
+      const allZero = nk.length > 0 && nk.every((k) => Math.abs(cand[k]) < 1e-9);
+      const pk = primaryKeys.filter((k) => typeof cand[k] === 'number');
+      const primaryZero = pk.length > 0 && pk.every((k) => Math.abs(cand[k]) < 1e-9);
+      /* 积分增益全为 0 会让 PI/PID 退化为 P/PD，违背方法身份，一并拒绝 */
+      const ik = integralKeys.filter((k) => typeof cand[k] === 'number');
+      const integralZero = ik.length > 0 && ik.every((k) => Math.abs(cand[k]) < 1e-9);
+      return allZero || primaryZero || integralZero;
+    };
+
+    /* 30 s 长轨迹复核：短视界寻优对轻阻尼对象会误判“已收敛”，
+       因此最终可行性以长轨迹末段 2 s 的均值误差与标准差为准。 */
+    const baseTarget = Math.abs(settings.physParams.target);
+    const errTol = Math.max(0.02, 0.03 * baseTarget);
+    const sdTol = Math.max(0.05, 0.05 * baseTarget);
+    const pool = [best, seedRes && seedRes.seed, defParams].filter((c) => c && !isDegenerate(c));
+    let chosen = null, verify = null;
+    for (let i = 0; i < pool.length; i++) {
+      const v = evaluateCandidate(target, pool[i]);
+      if (v.err <= errTol && v.sd <= sdTol) { chosen = pool[i]; verify = v; break; }
+    }
+    if (!chosen) {
+      return {
+        params: { ...start }, improvePct: 0, cost: bestCost, ruleName,
+        feasible: false, rejected: true,
+        finalError: Infinity, overshoot: 0
+      };
+    }
+    const finalCost = costOfTrajectory(target, chosen);
+    const improved = initCost > 1e-4 ? Math.max(0, (initCost - finalCost) / initCost * 100) : 0;
+    return {
+      params: { ...chosen }, improvePct: improved, cost: finalCost, ruleName,
+      feasible: true, finalError: verify.finalError, overshoot: verify.overshoot
+    };
   }
 
   /* ── 快速推演：把若干秒的闭环一次性算完（对决预设 / 自动收敛对比用） ── */
@@ -1646,16 +1738,18 @@ default: u = 0;
     const pP = { ...settings.physParams, m: eff.m, c: eff.c, k: eff.k };
     const cfg = {
       plantType: plant.id === 'pendulum' ? 'pendulum' : 'slider',
+      /* 对象时间尺度：只影响理论最优种子里的目标带宽，不改变物理方程（V5.2） */
+      wnScale: plant.wnScale || 1,
       contDisturbance: settings.contDisturbance || 0,
       coulombFriction: settings.coulombFriction || 0,
       plantDelay: settings.plantDelay || 0,
       initialX: settings.initialX || 0
     };
-    /* msd / pendulum 走「理论最优种子」：让 159 种方法都拿到适配当前对象的默认参数，
-       与 index(14).html 的 getTheoreticalOptimalSeed 一致；其它对象保持原默认值。 */
+    /* 所有对象统一走「理论最优种子」，让 159 种方法都拿到适配当前对象的默认参数；
+       显式 PLANT_TUNING 仍具有最高优先级（见下方应用顺序）。 */
     let base;
-    if ((plant.id === 'msd' || plant.id === 'pendulum') && D.getTheoreticalOptimalSeed) {
-      base = D.getTheoreticalOptimalSeed(method, pP, cfg).seed;
+    if (D.getTheoreticalOptimalSeed) {
+      base = { ...D.getTheoreticalOptimalSeed(method, pP, cfg).seed };
     } else {
       base = getDefaultParams(method);
     }
@@ -1663,6 +1757,19 @@ default: u = 0;
     const plantOver = (D.PLANT_TUNING && D.PLANT_TUNING[settings.plantId] && D.PLANT_TUNING[settings.plantId][method]) || {};
     Object.keys(over).forEach((k) => { if (k in base) base[k] = over[k]; });
     Object.keys(plantOver).forEach((k) => { if (k in base) base[k] = plantOver[k]; });
+    /* 负刚度对象（k<0）的 Routh 稳定下限：
+       PI/PID 的闭环特征式 c(k+Kp)s 项必须为正，且 c(k+Kp) > mKi；
+       全局覆盖表按“弹簧负载”整定的低增益会把这类对象直接推入不稳定区，
+       因此在对象感知整定之后强制抬回下限（E-04 修复）。 */
+    if (pP.k < 0 && typeof base.kp === 'number') {
+      const kdEff = typeof base.kd === 'number' ? Math.max(0, base.kd) : 0;
+      const kiAbs = typeof base.ki === 'number' ? Math.abs(base.ki) : 0;
+      const denom = Math.max(1e-6, pP.c + kdEff);
+      const kpFloor = -pP.k + 2.0 * pP.m * kiAbs / denom;
+      const kpRange = CONTROLLER_CONFIGS[method].params && CONTROLLER_CONFIGS[method].params.kp;
+      const kpMax = kpRange ? kpRange[2] : Infinity;
+      base.kp = Math.min(kpMax, Math.max(base.kp, kpFloor));
+    }
     settings.ctrlParams = base;
   }
 
@@ -1711,6 +1818,17 @@ default: u = 0;
       if (!Number.isFinite(numeric)) { markDirty(); return getParam(key, store); }
       const range = paramRange(key, store);
       if (range) numeric = Math.max(range.min, Math.min(range.max, numeric));
+      /* 扰动/死区按当前执行器限幅给软上限：避免一设就长期饱和（E-23） */
+      if (key === 'contDisturbance' || key === 'actuatorDeadzone') {
+        const lim = settings.actuatorLimit || 200;
+        const cap = key === 'contDisturbance' ? lim * 0.5 : lim * 0.25;
+        const lo = key === 'contDisturbance' ? -cap : 0;
+        numeric = Math.max(lo, Math.min(cap, numeric));
+      }
+      if (key === 'actuatorLimit') {
+        const cap = numeric * 0.5;
+        settings.contDisturbance = Math.max(-cap, Math.min(cap, settings.contDisturbance || 0));
+      }
     } else if (typeof numeric === 'string' && numeric.trim() !== '' && (store === 'ctrl' || store === 'phys' || store === 'plant')) {
       /* 数值存储收到非数值字符串（如 'abc'）：拒绝，保留旧值；
          'tanh' / 'on' 等合法下拉值不受影响（ctrl 里的 select 键不在数值配置内，原样放行） */

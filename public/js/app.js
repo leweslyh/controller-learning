@@ -13,12 +13,14 @@
   const doc = global.document;
   const STORAGE_KEY = 'ctrlsim.v4.prefs';
   const LEGACY_STORAGE_KEY = 'ctrlsim.v3.prefs';
-  const VERSION = '5.0';
+  const VERSION = '6.0';
 
   let prefs = loadPrefs();
   let rafId = null;
   let lastTime = 0;
   let frameCount = 0;
+  /* 一键最优求解前的参数快照：用于撤销（V5.1 修复 E-12） */
+  let solveSnapshot = null;
 
   /* ── 偏好持久化（能力降级，不因 file:// 限制而报错） ── */
   function loadPrefs() {
@@ -67,6 +69,8 @@
   /* ── 编排层动作 ───────────────────────────────────── */
   function selectMethod(key) {
     if (!D.CONTROLLER_CONFIGS[key] || !sim.setMethod(key)) return;
+    solveSnapshot = null;
+    ui.setSolveUndo(false);
     prefs.recent = [key].concat(prefs.recent.filter((k) => k !== key)).slice(0, 12);
     savePrefs();
     ui.setRecent(prefs.recent);
@@ -114,6 +118,8 @@
   function rerecord() { sim.rerecord(); touch(); refreshAll(); ui.toast('已开始重新录制'); }
   function resetParams() {
     sim.resetParams();
+    solveSnapshot = null;
+    ui.setSolveUndo(false);
     ui.renderPlant();
     ui.renderParams();
     ui.renderTracks();
@@ -148,6 +154,8 @@
   function applyPreset(id) {
     const preset = D.PRESETS.find((p) => p.id === id);
     if (!preset || !sim.applyPreset(preset)) return;
+    solveSnapshot = null;
+    ui.setSolveUndo(false);
     prefs.recent = [preset.method].concat(prefs.recent.filter((k) => k !== preset.method)).slice(0, 12);
     savePrefs();
     ui.setRecent(prefs.recent);
@@ -159,22 +167,53 @@
   }
 
   /* ── 一键最优增益求解（移植自 index(14).html 的 handleSolveOptimalCurrent） ──
-     求解是同步计算：先让 toast 绘制出来，再在下一帧跑寻优，避免界面看起来卡死。 */
+     求解是同步计算：先让 toast 绘制出来，再在下一帧跑寻优，避免界面看起来卡死。
+     V5.1：增加不可行判定与求解前快照；toast 回报可观测指标而非内部代价。 */
   function solveOptimal() {
     const s = sim.getSettings();
     const name = (D.CONTROLLER_CONFIGS[s.method] || {}).name || s.method;
     ui.toast('正在为「' + name + '」求解最优增益…');
     global.setTimeout(() => {
+      const before = { ...s.ctrlParams };
       const res = sim.optimizeGains();
+      if (res.feasible === false) {
+        solveSnapshot = null;
+        ui.setSolveUndo(false);
+        ui.toast('未找到满足收敛要求的增益：该方法在当前对象/工况下不可达，建议更换方法或对象');
+        return;
+      }
+      solveSnapshot = { method: s.method, plant: s.plantId, params: before };
       s.ctrlParams = res.params;
       sim.resetSim();
       ui.markSolved(s.method);   /* 重绘增益卡并露出「求解原理 · 教学文档」入口 */
+      ui.setSolveUndo(true);
       ui.renderTracks();
       refreshAll();
-      ui.toast(res.improvePct > 0.5
-        ? '已按「' + res.ruleName + '」求解：综合指标提升 ' + res.improvePct.toFixed(1) + '%'
-        : '最优增益已求解：当前已处于最优参数邻域');
+      const errTxt = Number.isFinite(res.finalError) ? res.finalError.toFixed(3) : '—';
+      ui.toast('已按「' + res.ruleName + '」求解：末段误差 ' + errTxt +
+        '，超调 ' + Number(res.overshoot || 0).toFixed(1) + '%' +
+        (res.improvePct > 0.5 ? '（代价下降 ' + res.improvePct.toFixed(1) + '%）' : ''));
     }, 40);
+  }
+
+  /* 撤销一键求解：恢复求解前的整组增益（仅当方法与对象未切换时有效） */
+  function undoSolve() {
+    if (!solveSnapshot) { ui.toast('没有可撤销的求解记录'); return; }
+    const s = sim.getSettings();
+    if (s.method !== solveSnapshot.method || s.plantId !== solveSnapshot.plant) {
+      solveSnapshot = null;
+      ui.setSolveUndo(false);
+      ui.toast('方法与对象已切换，求解记录已失效');
+      return;
+    }
+    s.ctrlParams = { ...solveSnapshot.params };
+    solveSnapshot = null;
+    sim.resetSim();
+    ui.setSolveUndo(false);
+    ui.renderParams();
+    ui.renderTracks();
+    refreshAll();
+    ui.toast('已撤销求解，恢复求解前的参数');
   }
 
   /* 打开「一键最优增益求解」的原理专题（public/docs/guides/001-最优增益求解原理.md） */
@@ -212,6 +251,8 @@
 
   function selectPlant(id) {
     if (!sim.setPlant(id)) return;
+    solveSnapshot = null;
+    ui.setSolveUndo(false);
     ui.renderPlant();
     ui.renderProfile(sim.getSettings().method);
     ui.renderParams();
@@ -324,7 +365,9 @@
       if (!payload || !D.CONTROLLER_CONFIGS[payload.m]) return false;
       const s = sim.getSettings();
       if (payload.plant && D.PLANTS[payload.plant]) {
-        s.plantId = payload.plant;
+        /* 必须走 setPlant：否则执行器限幅/初值/单位仍停留在上一个对象，
+           分享链接会把 uav 的 20 N·m 限幅恢复成默认 200（V5.1 修复） */
+        sim.setPlant(payload.plant);
         if (payload.pp && typeof payload.pp === 'object') {
           Object.keys(payload.pp).forEach((id) => {
             if (!s.plantParams[id]) s.plantParams[id] = {};
@@ -360,10 +403,15 @@
   /* ── 快捷键 ───────────────────────────────────────── */
   function bindShortcuts() {
     doc.addEventListener('keydown', (ev) => {
-      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       const el = ev.target;
       const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||
         el.tagName === 'SELECT' || el.isContentEditable);
+      /* Ctrl/Cmd+Z：撤销一键求解（输入框内保留浏览器原生撤销） */
+      if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === 'z' || ev.key === 'Z')) {
+        if (!typing && solveSnapshot) { ev.preventDefault(); undoSolve(); }
+        return;
+      }
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (ev.key === 'Escape') return;
       if (typing) return;
       /* 焦点在原生交互元素上时，空格交给元素自身（尤其 <summary> 的展开/收起），
@@ -392,6 +440,7 @@
         case 'm': case 'M': ui.renderPlantModel(); ui.openOverlayById('overlay-plant'); break;
         case 'g': case 'G': ui.openOverlayById('overlay-glossary'); break;
         case 'p': case 'P': ui.openOverlayById('overlay-presets'); break;
+        case 'l': case 'L': ui.renderLearnPath(); ui.openOverlayById('overlay-learn'); break;
         case '?': ui.openOverlayById('overlay-help'); break;
         default: break;
       }
@@ -428,7 +477,7 @@
       charts.init();
       ui.init({
         selectMethod, changeParam, toggleRun, step, disturb, reset, rerecord,
-        resetParams, resetParamGroup, setSpeed, toggleCompare, applyPreset, applyDuel, solveOptimal, openSolveGuide, toggleFavorite,
+        resetParams, resetParamGroup, setSpeed, toggleCompare, applyPreset, applyDuel, solveOptimal, undoSolve, openSolveGuide, toggleFavorite,
         toggleTheme, dismissGuide, exportCSV, exportPNG, exportFormulaBook, exportPapers, share,
         selectPlant
       });
@@ -440,6 +489,11 @@
       bindShortcuts();
       doc.addEventListener('visibilitychange', handleVisibility);
       refreshAll();
+      /* 教学文档 2.9 MB 不阻塞首屏：空闲时预取，首次打开阅读器时立即可用 */
+      if (NS.docs && NS.docs.ensureDocs) {
+        if (global.requestIdleCallback) global.requestIdleCallback(() => NS.docs.ensureDocs(), { timeout: 4000 });
+        else global.setTimeout(() => NS.docs.ensureDocs(), 2500);
+      }
       if (!prefs.guideDismissed) ui.openOverlay('overlay-guide');
       rafId = global.requestAnimationFrame(loop);
     } catch (err) {
@@ -450,5 +504,5 @@
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 
-  NS.app = { init, refreshAll, share, buildHash, restoreFromHash, exportPapers, solveOptimal, applyDuel };
+  NS.app = { init, refreshAll, share, buildHash, restoreFromHash, exportPapers, solveOptimal, undoSolve, applyDuel };
 })(window);

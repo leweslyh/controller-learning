@@ -1,5 +1,5 @@
 /* ============================================================
-   GET /api/health — 后端健康检查与站点自述（V5.0）
+   GET /api/health — 后端健康检查与站点自述（V6.0）
    ------------------------------------------------------------
    · 路由：Netlify Functions 2.0 的 config.path，无需 redirect
    · 前端可用它判断「后端函数是否已部署成功」
@@ -7,11 +7,11 @@
    ============================================================ */
 
 const APP = {
-  name: '控制理论模拟器 V5.0 · 纸面控制实验室',
-  version: '5.0',
+  name: '控制理论模拟器 V6.0 · 纸面控制实验室',
+  version: '6.0',
   methods: 159,
   categories: 12,
-  plants: 6,
+  plants: 11,
   defaultPlant: 'freeMass',
   renderEngine: 'KaTeX（本地 vendor）+ MathML 回退',
   papers: 159, paperVerified: 153

@@ -291,16 +291,19 @@
      故词典里的 s = c·e + ė、∫e dt 等无需改写即能渲染。*/
   function mdInline(s) {
     if (s == null) return '';
-    const parts = String(s).split(/(\$[^$\n]+?\$)/g);
-    let html = parts.map((seg) => {
+    /* 先切公式，再切 **粗体** / `代码`，最后才交给 renderMixed。
+       顺序不可颠倒：renderMixed 会把每个字符包进 <span>，星号被拆散后
+       加粗正则就再也匹配不上（V5.3 修复：加粗曾原样显示）。 */
+    return String(s).split(/(\$[^$\n]+?\$)/g).map((seg) => {
       if (seg.length >= 3 && seg[0] === '$' && seg[seg.length - 1] === '$') {
         return safeKatex(seg.slice(1, -1), false) || esc(seg.slice(1, -1));
       }
-      return seg.split('\n').map((ln) => renderMixed(ln)).join('<br>');
+      return seg.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((piece) => {
+        if (/^\*\*[\s\S]+\*\*$/.test(piece)) return '<strong>' + mdInline(piece.slice(2, -2)) + '</strong>';
+        if (/^`[\s\S]+`$/.test(piece)) return '<code>' + esc(piece.slice(1, -1)) + '</code>';
+        return piece.split('\n').map((ln) => renderMixed(ln)).join('<br>');
+      }).join('');
     }).join('');
-    return html
-      .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+?)`/g, '<code>$1</code>');
   }
   function md(src) {
     if (src == null) return '';

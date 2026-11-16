@@ -1,5 +1,5 @@
 # ============================================================
-# 控制理论模拟器 V5.0 · Netlify 配置（前后端分离）
+# 控制理论模拟器 V6.0 · Netlify 配置（前后端分离）
 # ------------------------------------------------------------
 #   public/                前端静态站 —— publish 目录
 #                          index.html + styles.css + js/ + vendor/ + assets/ + docs/
@@ -18,8 +18,11 @@
   publish   = "public"
   functions = "netlify/functions"
 
+# 根目录 package.json 只声明开发期依赖（playwright-core，用于 npm run smoke）。
+# 线上构建不需要任何 npm 包，跳过 devDependencies 以保持"零构建"。
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--omit=dev"
 
 # ── 全站安全头（静态缓存策略见 public/_headers） ──────────
 [[headers]]

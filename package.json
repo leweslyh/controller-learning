@@ -1,0 +1,21 @@
+{
+  "name": "control-theory-simulator",
+  "version": "6.0.0",
+  "private": true,
+  "description": "纸面控制实验室 · 159 法 × 11 对象的离线控制理论教学实验台（前端零依赖，以下仅开发期工具）",
+  "scripts": {
+    "verify": "node tools/verify-v5.js",
+    "audit": "node tools/audit-dynamics.js",
+    "audit:all": "node tools/audit-dynamics.js --plants all --out audit-all.csv",
+    "build:docs": "node tools/build-docs.js",
+    "build:fit": "node tools/build-fit.js",
+    "sync:docs": "node tools/sync-doc-params.js",
+    "smoke": "node tools/smoke.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.55.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

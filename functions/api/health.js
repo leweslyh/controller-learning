@@ -7,11 +7,11 @@
    ============================================================ */
 
 const APP = {
-  name: '控制理论模拟器 V5.0 · 纸面控制实验室',
-  version: '5.0',
+  name: '控制理论模拟器 V6.0 · 纸面控制实验室',
+  version: '6.0',
   methods: 159,
   categories: 12,
-  plants: 6,
+  plants: 11,
   defaultPlant: 'freeMass',
   renderEngine: 'KaTeX（本地 vendor）+ MathML 回退',
   papers: 159, paperVerified: 153

@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="控制理论模拟器：159 种控制算法、12 类理论体系、6 个被控对象与逐法初学者教学文档的离线交互实验台。">
-<title>纸面控制实验室 · V5.0</title>
+<meta name="description" content="控制理论模拟器：159 种控制算法、12 类理论体系、11 个被控对象与逐法初学者教学文档的离线交互实验台。">
+<title>纸面控制实验室 · V6.0</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="stylesheet" href="styles.css">
@@ -91,6 +91,9 @@
       <button type="button" id="btn-docs" class="btn btn-ghost" aria-label="打开当前方法的教学文档" title="当前方法的教学文档（H）">
         <svg class="icon" aria-hidden="true"><use href="#i-formula"/></svg><span>教学文档</span>
       </button>
+      <button type="button" id="btn-learn" class="btn btn-ghost" aria-label="打开学习路线" title="8 站学习路线（L）">
+        <svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span>学习路线</span>
+      </button>
       <button type="button" id="btn-glossary" class="btn btn-icon" aria-label="符号术语词典" title="符号术语词典">
         <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
       </button>
@@ -148,7 +151,7 @@
       <div class="lab-stats" aria-label="实验台规模">
         <div class="lab-stat"><strong id="stat-methods">—</strong><span>控制算法</span></div>
         <div class="lab-stat"><strong id="stat-categories">—</strong><span>理论体系</span></div>
-        <div class="lab-stat"><strong id="stat-plants">6</strong><span>被控对象</span></div>
+        <div class="lab-stat"><strong id="stat-plants">11</strong><span>被控对象</span></div>
       </div>
       <div class="browser-tabs" role="tablist" aria-label="控制器集合">
         <button type="button" class="tab is-active" role="tab" aria-selected="true" data-scope="all">全部体系</button>
@@ -159,6 +162,12 @@
         <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
         <input id="browser-search" type="search" placeholder="搜索方法名 / 关键词…（/）" aria-label="搜索控制器">
       </div>
+      <div class="browser-levels" id="browser-levels" role="group" aria-label="按难度筛选">
+        <button type="button" class="level-chip is-active" data-level="0" aria-pressed="true">全部</button>
+        <button type="button" class="level-chip" data-level="1" aria-pressed="false">入门</button>
+        <button type="button" class="level-chip" data-level="2" aria-pressed="false">进阶</button>
+        <button type="button" class="level-chip" data-level="3" aria-pressed="false">研究级</button>
+      </div>
       <div class="browser-body scroll-y" id="browser-list" role="listbox" aria-label="控制器列表"></div>
       <div class="browser-foot">
         <span class="dot dot-teal"></span> 当前：<strong id="current-method-name">PID 控制</strong>
@@ -166,7 +175,7 @@
       </div>
     </aside>
 
-    <!-- 中：实验主卡片（包裹动力学、状态观测与 8 张指标小卡） -->
+    <!-- 中：实验主卡片（包裹动力学、状态观测与 10 张指标小卡） -->
     <main class="stage" id="stage" aria-label="实验主界面">
       <header class="stage-head">
         <div class="stage-plant">
@@ -230,6 +239,8 @@
             <span class="status-item viz-status"><span class="dot" id="status-dot"></span><span id="status-run">待机</span></span>
             <span class="status-sep" aria-hidden="true"></span>
             <span class="status-item"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg> t = <strong id="status-time">0.00</strong> s</span>
+            <span class="status-sep" aria-hidden="true"></span>
+            <span class="status-item quality-item" id="status-quality" hidden><span class="dot" id="quality-dot"></span><span id="quality-text">调节中</span></span>
             <span class="status-sep" aria-hidden="true"></span>
             <span class="status-item" id="status-track">轨迹 A · 录制中</span>
             <span class="status-item status-freeze" id="status-freeze" hidden>
@@ -311,6 +322,7 @@
           <h2 class="panel-title">实验参数</h2>
         </div>
         <div class="panel-head-actions">
+          <button type="button" id="btn-beginner" class="text-btn" aria-pressed="false" title="只显示基础参数，隐藏硬件非理想项">新手模式</button>
           <button type="button" id="btn-reset-params" class="text-btn">恢复默认</button>
         </div>
       </div>
@@ -328,7 +340,7 @@
     <span class="status-sep" aria-hidden="true"></span>
     <span class="status-item">邮箱 <a class="dev-mail" href="mailto:759528706@qq.com">759528706@qq.com</a></span>
     <span class="status-sep" aria-hidden="true"></span>
-    <span class="status-item">版本 V5.0 · 教学演示版</span>
+    <span class="status-item">版本 V6.0 · 正式版</span>
   </footer>
 </div>
 
@@ -375,6 +387,21 @@
   </section>
 </div>
 
+<!-- 8 站学习路线：目标、方法、预设、判读要点与进度 -->
+<div class="overlay" id="overlay-learn" hidden>
+  <div class="overlay-mask" data-close="overlay-learn"></div>
+  <section class="modal learn-modal" role="dialog" aria-modal="true" aria-labelledby="learn-title">
+    <header class="drawer-head">
+      <div>
+        <h2 id="learn-title">8 站学习路线</h2>
+        <p>从反馈到预测与自抗扰；每站含目标、实验、判读要点与自检题</p>
+      </div>
+      <button type="button" class="btn btn-icon" data-close="overlay-learn" aria-label="关闭学习路线"><svg class="icon"><use href="#i-close"/></svg></button>
+    </header>
+    <div class="modal-body scroll-y" id="learn-body"></div>
+  </section>
+</div>
+
 <!-- 被控对象模型弹窗：原来占一整块的「关系式与符号」改为按需打开 -->
 <div class="overlay" id="overlay-plant" hidden>
   <div class="overlay-mask" data-close="overlay-plant"></div>
@@ -418,10 +445,11 @@
     <h2 id="guide-title">欢迎来到纸面控制实验室</h2>
     <p>左侧控制算法按 12 类理论体系分章陈列，选定后挑一个被控对象，调节右侧增益，观察中央刚体响应与四张带完整坐标轴的曲线（倒立摆为五张）。首次进入会展开目录，之后自动挂到左边框；按 F 进入专注模式。</p>
     <div class="guide-steps">
-      <div><span>01</span> 选控制器与对象</div>
-      <div><span>02</span> 读教学文档 / 调参</div>
-      <div><span>03</span> 施加扰动并对比</div>
+      <button type="button" class="guide-step" data-guide-action="browse"><span>01</span> 选控制器与对象</button>
+      <button type="button" class="guide-step" data-guide-action="docs"><span>02</span> 读教学文档 / 调参</button>
+      <button type="button" class="guide-step" data-guide-action="presets"><span>03</span> 施加扰动并对比</button>
     </div>
+    <p class="guide-more">想按顺序学？打开顶部「学习路线」，8 站从反馈到预测 / 自抗扰。</p>
     <div class="guide-actions">
       <label class="checkline"><input type="checkbox" id="guide-no-more"> 不再显示</label>
       <button type="button" id="btn-guide-start" class="btn btn-primary">开始实验</button>
@@ -581,7 +609,7 @@
     <span class="assistant-avatar" aria-hidden="true"><svg class="icon"><use href="#i-bot"/></svg></span>
     <div class="assistant-id">
       <strong id="assistant-title">控制助教</strong>
-      <small>DeepSeek · V5.0 知识库</small>
+      <small>DeepSeek · V6.0 知识库</small>
     </div>
     <span class="assistant-status is-idle" id="assistant-status" role="status">
       <span class="assistant-dot"></span><span id="assistant-status-text">未连接</span>
@@ -699,11 +727,11 @@
 
 <script src="vendor/katex/katex.min.js"></script>
 <script src="js/data.js"></script>
+<script src="js/method-meta.js"></script>
 <!-- 159 法的原论文出处（离线数据，运行时零网络请求） -->
 <script src="js/papers.js"></script>
 <script src="js/math.js"></script>
-<!-- 教学文档单一来源（由 tools/build-docs.js 从 public/docs/methods/*.md 打包，离线 file:// 可读） -->
-<script src="js/docs-content.js"></script>
+<!-- 教学文档正文约 2.9 MB：由 docs.js 在首次打开阅读器或空闲时按需注入，避免阻塞首屏 -->
 <!-- 专题导读（public/docs/guides/*.md）：如「一键最优增益求解原理」 -->
 <script src="js/guides-content.js"></script>
 <script src="js/simulation.js"></script>

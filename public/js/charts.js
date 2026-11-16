@@ -223,7 +223,8 @@
     ctx.fillStyle = p.muted; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center';
     /* 倒立摆的地面刻度由 paintPendulum 按镜头滚动的米制标尺绘制；
        姿态通道的刻度画在圆周上（paintAttitude），这里都跳过静态地面刻度 */
-    if (view.kind !== 'pendulum' && view.kind !== 'attitude') {
+    if (view.kind !== 'pendulum' && view.kind !== 'attitude' &&
+      view.kind !== 'motor' && view.kind !== 'pendulumDown' && view.kind !== 'altitude') {
       view.ticks.forEach((t) => {
         const x = mapX(t);
         if (x >= 0 && x <= w) { ctx.fillRect(x, groundY, 1.5, 5); ctx.fillText(String(t), x, groundY + 17); }
@@ -608,7 +609,353 @@
 
   }
 
-  /* ── 姿态通道（飞机 / 导弹 / 无人机，二维单通道） ─────────────────────
+  /* ── 下垂单摆（V5.2 新增）─────────────────────────────────────────
+     与倒立摆同一套物理、相反的平衡点：支点固定在画面上方，摆杆自然下垂，
+     零位是竖直向下。角度弧从竖直向下量起，目标虚线同步下垂方向。 */
+  function paintPendulumDown(b) {
+    const { ctx, w, h, state, target, view, p } = b;
+    const cx = w / 2, ceilingY = 58;
+    const L = Math.min(h * 0.46, 128);
+    const theta = clamp(state.x, view.min, view.max);
+    const tTheta = clamp(target, view.min, view.max);
+    const pivotY = ceilingY + 14;
+    const ballX = cx + Math.sin(theta) * L;
+    const ballY = pivotY + Math.cos(theta) * L;
+    const ballR = Math.max(9, Math.min(12, L * 0.10));
+    const moving = movingColor(b);
+
+    /* 天花板：横线 + 斜剖面线（与倒立摆地面滑轨同一视觉语言） */
+    ctx.save();
+    ctx.strokeStyle = p.border; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(16, ceilingY); ctx.lineTo(w - 16, ceilingY); ctx.stroke();
+    ctx.globalAlpha = 0.55; ctx.strokeStyle = p.muted; ctx.lineWidth = 1.2;
+    for (let x = 20; x < w - 16; x += 10) {
+      ctx.beginPath(); ctx.moveTo(x, ceilingY); ctx.lineTo(x + 8, ceilingY - 8); ctx.stroke();
+    }
+    ctx.restore();
+
+    /* 竖直基准线（θ=0：竖直向下） */
+    ctx.save();
+    ctx.setLineDash([4, 5]); ctx.lineWidth = 1.3; ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = p.muted;
+    ctx.beginPath(); ctx.moveTo(cx, pivotY); ctx.lineTo(cx, pivotY + L + 22); ctx.stroke();
+    ctx.restore();
+
+    /* 目标姿态（绿虚线） */
+    if (Math.abs(tTheta - theta) > 0.005) {
+      ctx.save();
+      ctx.setLineDash([6, 5]); ctx.lineWidth = 1.8; ctx.strokeStyle = p.r;
+      ctx.beginPath(); ctx.moveTo(cx, pivotY);
+      ctx.lineTo(cx + Math.sin(tTheta) * (L + 18), pivotY + Math.cos(tTheta) * (L + 18)); ctx.stroke();
+      ctx.restore();
+    }
+
+    /* 角度弧：只画「竖直向下 → 当前摆角」这一段短弧。
+       旧实现按 a1<a0 选择逆时针方向，θ 很小时会绕远路画出接近整圈的
+       大圆弧（看起来像一个圆），这里固定走短弧。 */
+    if (Math.abs(theta) > Math.PI / 1800) {
+      const a0 = Math.PI / 2, a1 = Math.PI / 2 - theta;
+      const arcR = Math.min(L * 0.46, 58);
+      ctx.save();
+      ctx.strokeStyle = p.accent; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, pivotY, arcR, Math.min(a0, a1), Math.max(a0, a1), false);
+      ctx.stroke();
+      ctx.restore();
+      const mid = (a0 + a1) / 2;
+      label(ctx, 'θ', cx + Math.cos(mid) * (arcR + 12), pivotY + Math.sin(mid) * (arcR + 12) + 4,
+        p.accent, 'center', 'bold 11px ui-monospace, monospace');
+    }
+
+    /* 摆杆与摆球 */
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = moving; ctx.lineWidth = 4.5;
+    ctx.beginPath(); ctx.moveTo(cx, pivotY); ctx.lineTo(ballX, ballY); ctx.stroke();
+    ctx.fillStyle = moving;
+    ctx.beginPath(); ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = p.surface; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.arc(ballX - ballR * 0.45, ballY - ballR * 0.4, ballR * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    label(ctx, 'm', ballX, ballY + 4, '#FFFFFF', 'center', 'bold 11px ui-monospace, monospace');
+    /* 支点 */
+    ctx.fillStyle = p.surface; ctx.beginPath(); ctx.arc(cx, pivotY, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = p.border; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.fillStyle = p.text; ctx.beginPath(); ctx.arc(cx, pivotY, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    /* 关节力矩：绕支点的小半径弧形箭头 + 数值标签。
+       旧实现半径取摆长的 34%，在长摆上会画成大圆弧、看不出"力矩"语义；
+       现固定为紧凑圆弧，箭头用 arcHead 沿切向收尾。 */
+    const u = b.u || 0;
+    const dir = u >= 0 ? 1 : -1;
+    const spanA = 0.18 + 0.50 * Math.sqrt(clamp(Math.abs(u) / 20, 0, 1));
+    const torqueR = Math.min(30, Math.max(18, L * 0.24));
+    const aStart = Math.PI / 2;
+    const aEnd = aStart + dir * spanA;
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    ctx.globalAlpha = Math.abs(u) > 0.5 ? 1 : 0.5;
+    ctx.beginPath();
+    ctx.arc(cx, pivotY, torqueR, Math.min(aStart, aEnd), Math.max(aStart, aEnd), false);
+    ctx.stroke();
+    ctx.fillStyle = p.accent;
+    const tipX = cx + Math.cos(aEnd) * torqueR, tipY = pivotY + Math.sin(aEnd) * torqueR;
+    arcHead(ctx, tipX, tipY, cx, pivotY, dir > 0 ? 1 : -1, 6);
+    ctx.restore();
+    const text = 'τ=' + fmt(u, 2) + ' N·m';
+    label(ctx, text, cx + torqueR + 14, pivotY + (dir > 0 ? 32 : 10), p.accent, 'left',
+      'bold 9px ui-monospace, monospace');
+  }
+
+  /* ── 直流伺服电机（V5.2 新增）────────────────────────────────────
+     侧视：定子外壳固定，转子与负载盘绕轴转动；外圈量角器读转角（°）。 */
+  function paintMotor(b) {
+    const { ctx, w, h, state, target, view, p } = b;
+    const cx = w / 2, cy = h / 2;
+    const R = Math.min(w * 0.36, h * 0.36);
+    const theta = state.x || 0;
+    const tTheta = target || 0;
+    const accent = movingColor(b);
+    const u = b.u || 0;
+
+    /* 定子外壳 */
+    ctx.save();
+    ctx.fillStyle = p.surface3;
+    pillPath(ctx, cx - R * 1.18, cy - R * 0.92, R * 2.36, R * 1.84, R * 0.22);
+    ctx.fill();
+    ctx.strokeStyle = p.border; ctx.lineWidth = 2; ctx.stroke();
+    /* 散热筋 */
+    ctx.globalAlpha = 0.45; ctx.strokeStyle = p.muted; ctx.lineWidth = 1.2;
+    for (let i = -3; i <= 3; i++) {
+      const x = cx + i * R * 0.22;
+      ctx.beginPath(); ctx.moveTo(x, cy - R * 0.86); ctx.lineTo(x, cy + R * 0.86); ctx.stroke();
+    }
+    ctx.restore();
+
+    /* 量角器：每 15° 短刻度、30° 主刻度，标注 0/30/60/90 */
+    ctx.save();
+    ctx.strokeStyle = p.muted; ctx.lineWidth = 1;
+    for (let d = -90; d <= 180; d += 15) {
+      const a = -d * Math.PI / 180;      /* 姿态角正方向 = 逆时针 */
+      const major = d % 30 === 0;
+      const r0 = R * 1.30, r1 = R * (major ? 1.40 : 1.35);
+      ctx.globalAlpha = major ? 0.8 : 0.3;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+      ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+      ctx.stroke();
+      if (major && d >= -90 && d <= 180) {
+        ctx.globalAlpha = 0.75; ctx.fillStyle = p.muted;
+        ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(d + '°', cx + Math.cos(a) * (r1 + 9), cy + Math.sin(a) * (r1 + 9) + 3);
+      }
+    }
+    ctx.restore();
+
+    /* 目标转角（绿虚线） */
+    ctx.save();
+    ctx.setLineDash([5, 5]); ctx.strokeStyle = p.r; ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(-tTheta) * R * 1.28, cy + Math.sin(-tTheta) * R * 1.28);
+    ctx.stroke();
+    ctx.restore();
+
+    /* 转子 + 负载盘（随 θ 旋转） */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-theta);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.62, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = p.border; ctx.lineWidth = 1.6; ctx.stroke();
+    /* 转子绕组标记（三槽） */
+    ctx.fillStyle = accent;
+    for (let k = 0; k < 3; k++) {
+      ctx.save(); ctx.rotate(k * Math.PI * 2 / 3);
+      pillPath(ctx, -R * 0.08, -R * 0.58, R * 0.16, R * 0.34, R * 0.05);
+      ctx.fill(); ctx.restore();
+    }
+    /* 转轴标记：一条白色指针，直观读出转角 */
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R * 0.50, 0); ctx.stroke();
+    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R * 0.50, 0); ctx.stroke();
+    /* 负载惯量盘外环 */
+    ctx.strokeStyle = accent; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.62, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    /* 轴心 */
+    ctx.save();
+    ctx.fillStyle = p.border; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    /* 转角读数与力矩胶囊 */
+    label(ctx, 'θ = ' + fmt(theta * 180 / Math.PI, 1) + '°', cx, cy + R * 1.62, p.text,
+      'center', 'bold 11px ui-monospace, monospace');
+    const text = 'τ=' + fmt(u, 2) + ' N·m';
+    label(ctx, text, cx + R * 0.72, cy - R * 0.86, p.accent, 'left', 'bold 9px ui-monospace, monospace');
+  }
+
+  /* ── 双容液位过程（V5.2 新增）────────────────────────────────────
+     左箱入口流量 u，右箱输出液位 y；两箱液位按对象状态填充。 */
+  function paintTank(b) {
+    const { ctx, w, h, state, target, view, p } = b;
+    const groundY = h - 30;
+    const y = clamp(state.x || 0, 0, 1.2);
+    const tY = clamp(target || 0, 0, 1.2);
+    const u = b.u || 0;
+    const accent = movingColor(b);
+    const tankW = Math.min(86, w * 0.22), tankH = Math.min(120, h * 0.48);
+    const topY = groundY - tankH;
+    const x1 = w * 0.30 - tankW / 2, x2 = w * 0.68 - tankW / 2;
+
+    /* 刻度（右侧液位标尺，米制） */
+    ctx.save();
+    ctx.strokeStyle = p.muted; ctx.lineWidth = 1;
+    view.ticks.forEach((tk) => {
+      const gy = groundY - (tk / 1.2) * tankH;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.moveTo(x2 + tankW + 4, gy); ctx.lineTo(x2 + tankW + 12, gy); ctx.stroke();
+      ctx.globalAlpha = 0.8; ctx.fillStyle = p.muted;
+      ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'left';
+      ctx.fillText(tk + ' m', x2 + tankW + 15, gy + 3);
+    });
+    ctx.restore();
+
+    const drawTank = (x, levelRatio, color) => {
+      const level = clamp(levelRatio, 0, 1);
+      ctx.save();
+      /* 箱体 */
+      ctx.fillStyle = p.surface3;
+      ctx.fillRect(x, topY, tankW, tankH);
+      /* 液体 */
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.55;
+      const lh = tankH * level;
+      ctx.fillRect(x + 2, groundY - lh, tankW - 4, Math.max(0, lh - 2));
+      ctx.globalAlpha = 1;
+      /* 液面高光 */
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x + 2, groundY - lh); ctx.lineTo(x + tankW - 2, groundY - lh); ctx.stroke();
+      /* 箱壁 */
+      ctx.strokeStyle = p.border; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, topY); ctx.lineTo(x, groundY);
+      ctx.moveTo(x + tankW, topY); ctx.lineTo(x + tankW, groundY);
+      ctx.moveTo(x, groundY); ctx.lineTo(x + tankW, groundY);
+      ctx.stroke();
+      /* 开口标注 */
+      ctx.fillStyle = p.muted; ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'center';
+      ctx.fillText(level.toFixed(2) + ' m', x + tankW / 2, topY - 6);
+      ctx.restore();
+    };
+    /* 左箱液位：由入口流量与右箱液位共同决定（教学示意，非独立状态） */
+    const leftLevel = clamp(0.45 * (y / 1.2) + 0.35 * clamp(Math.abs(u) / 10, 0, 1), 0, 1);
+    drawTank(x1, leftLevel, accent);
+    drawTank(x2, y / 1.2, accent);
+
+    /* 连接管：左箱底部 → 右箱中部，带流向箭头 */
+    const pipeY = groundY - tankH * 0.18;
+    ctx.save();
+    ctx.strokeStyle = p.border; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x1 + tankW, pipeY);
+    ctx.lineTo(x2, pipeY);
+    ctx.stroke();
+    arrow(ctx, x1 + tankW + 12, pipeY, x2 - 6, pipeY, p.muted, 1.4);
+    ctx.restore();
+
+    /* 入口阀：左上方的进流箭头，长度随 |u| */
+    const valveLen = 14 + 34 * clamp(Math.abs(u) / 10, 0, 1);
+    arrow(ctx, x1 + tankW / 2, topY - 34, x1 + tankW / 2 + Math.sign(u || 1) * valveLen, topY - 34,
+      p.accent, 2.6);
+    label(ctx, 'u=' + fmt(u, 2) + ' m³/h', x1 + tankW / 2, topY - 44, p.accent, 'center',
+      'bold 9px ui-monospace, monospace');
+
+    /* 目标液位（绿虚线） */
+    const ty = groundY - (tY / 1.2) * tankH;
+    ctx.save();
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = p.r; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x2 - 10, ty); ctx.lineTo(x2 + tankW + 10, ty); ctx.stroke();
+    ctx.restore();
+    label(ctx, 'r = ' + fmt(tY, 2) + ' m', x2 + tankW / 2, ty - 6, p.r, 'center',
+      'bold 9px ui-monospace, monospace');
+  }
+
+  /* ── 四旋翼高度通道（V5.2 新增）──────────────────────────────────
+     侧视：地面线 + 高度标尺 + 机体 + 阴影 + 升力箭头。 */
+  function paintAltitude(b) {
+    const { ctx, w, h, state, target, view, p, plant } = b;
+    const groundY = h - 34;
+    const z = clamp(state.x || 0, view.min, view.max);
+    const tZ = clamp(target || 0, view.min, view.max);
+    const u = b.u || 0;
+    const accent = movingColor(b);
+    const span = view.max - view.min;
+    const px = (v) => groundY - ((v - view.min) / span) * (h - 100) - 12;
+    const cy = px(z);
+    const cx = w / 2;
+    const s = Math.min(w * 0.16, 62);
+
+    /* 地面网格与高度刻度 */
+    ctx.save();
+    ctx.strokeStyle = p.border; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(w, groundY); ctx.stroke();
+    ctx.strokeStyle = p.muted; ctx.lineWidth = 1; ctx.globalAlpha = 0.7;
+    view.ticks.forEach((tk) => {
+      const gy = px(tk);
+      ctx.beginPath(); ctx.moveTo(24, gy); ctx.lineTo(36, gy); ctx.stroke();
+      ctx.fillStyle = p.muted; ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'left';
+      ctx.fillText(tk + ' m', 40, gy + 3);
+    });
+    ctx.restore();
+
+    /* 目标高度（绿虚线） */
+    const ty = px(tZ);
+    ctx.save();
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = p.r; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(60, ty); ctx.lineTo(w - 16, ty); ctx.stroke();
+    ctx.restore();
+    label(ctx, 'r = ' + fmt(tZ, 2) + ' m', w - 18, ty - 6, p.r, 'right', 'bold 9px ui-monospace, monospace');
+
+    /* 影子：高度越高越淡越大 */
+    const hRatio = clamp((z - view.min) / span, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.22 * (1 - 0.75 * hRatio);
+    ctx.fillStyle = p.text;
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY + 2, s * (0.6 + 0.4 * hRatio), s * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    /* 机体：与「四旋翼（滚转姿态）」共用同一个正面画法 glyphUav，
+       只做垂直平移、不做旋转——两个四旋翼对象因此外观完全一致。
+       （旧实现另画了一套侧视机体，同一台飞行器在两个对象里长得不一样。） */
+    ctx.save();
+    ctx.translate(cx, cy);
+    glyphUav(ctx, s, accent, p);
+    ctx.restore();
+
+    /* 升力箭头：向上，长度随 |ΔT| */
+    const liftLen = 16 + 34 * clamp(Math.abs(u) / (plant.defaultActuatorLimit || 30), 0, 1);
+    const dirY = u >= 0 ? -1 : 1;
+    const y0 = cy - s * 0.5;
+    arrow(ctx, cx, y0, cx, y0 + dirY * liftLen, p.accent, 2.6);
+    label(ctx, 'ΔT=' + fmt(u, 2) + ' N', cx + 8, y0 + dirY * liftLen - 4, p.accent, 'left',
+      'bold 9px ui-monospace, monospace');
+
+    /* 高度读数 */
+    label(ctx, 'z = ' + fmt(z, 2) + ' m', cx, cy + s * 0.75 + 16, p.text, 'center',
+      'bold 11px ui-monospace, monospace');
+  }
+
+
+  /* ── 姿态通道（飞机 / 导弹 / 无人机 / 卫星，二维单通道） ─────────────
      姿态是**绕质心**的转动，质心不动、机体绕它转，所以画成「质心 + 量角器」：
        质心十字 = 转动中心（固定在画布中心，不平移）
        水平虚线 = 零位基准（θ = 0 时机头指向）
@@ -798,6 +1145,47 @@
     });
     ctx.restore();
   }
+  /* 卫星：侧视立方星体 + 两侧太阳翼。星体居中，翼板沿机体横轴展开，
+     便于看出"姿态角改变时整星一起转"。 */
+  function glyphSatellite(ctx, s, color, p) {
+    ctx.save();
+    ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1.1;
+    ctx.lineJoin = 'round';
+    /* 太阳翼：细长矩形 + 电池片分隔线 */
+    [-1, 1].forEach((sgn) => {
+      const x0 = sgn * 0.34 * s, w0 = sgn * 0.66 * s;
+      ctx.fillRect(Math.min(x0, x0 + w0), -0.055 * s, Math.abs(w0), 0.11 * s);
+      ctx.strokeRect(Math.min(x0, x0 + w0), -0.055 * s, Math.abs(w0), 0.11 * s);
+      ctx.save();
+      ctx.globalAlpha = 0.45; ctx.strokeStyle = p.border; ctx.lineWidth = 0.8;
+      for (let k = 1; k <= 3; k++) {
+        const gx = x0 + (w0 * k / 4);
+        ctx.beginPath(); ctx.moveTo(gx, -0.055 * s); ctx.lineTo(gx, 0.055 * s); ctx.stroke();
+      }
+      ctx.restore();
+      /* 翼与星体之间的连接桁架 */
+      ctx.strokeStyle = p.border; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(sgn * 0.34 * s, 0); ctx.lineTo(sgn * 0.30 * s, 0); ctx.stroke();
+    });
+    /* 星体：方形舱段 + 顶面高光 + 天线 */
+    ctx.fillStyle = color; ctx.strokeStyle = p.border; ctx.lineWidth = 1.3;
+    pillPath(ctx, -0.28 * s, -0.22 * s, 0.56 * s, 0.44 * s, 0.05 * s);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-0.20 * s, -0.15 * s); ctx.lineTo(0.20 * s, -0.15 * s); ctx.stroke();
+    /* 推力器小喷口（上下各一，示意喷气力矩） */
+    ctx.fillStyle = p.border;
+    ctx.fillRect(-0.10 * s, -0.26 * s, 0.06 * s, 0.045 * s);
+    ctx.fillRect(0.04 * s, -0.26 * s, 0.06 * s, 0.045 * s);
+    /* 天线杆 */
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.4, 0.03 * s);
+    ctx.beginPath(); ctx.moveTo(0, 0.22 * s); ctx.lineTo(0, 0.34 * s); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0.35 * s, 0.03 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   function paintAttitude(b) {
     const { ctx, w, h, state, target, view, p, plant } = b;
     /* 质心固定在画布中心：姿态是绕质心的转动，机体不平移 */
@@ -878,7 +1266,7 @@
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(-ang);
-    const painter = { aircraft: glyphAircraft, missile: glyphMissile, uav: glyphUav }[glyph] || glyphAircraft;
+    const painter = { aircraft: glyphAircraft, missile: glyphMissile, uav: glyphUav, satellite: glyphSatellite }[glyph] || glyphAircraft;
     const objScale = glyph === 'uav' ? 0.72 : 1;   /* 四旋翼正视图包络较宽，整体缩一档与飞机/导弹协调 */
     painter(ctx, size * objScale, accent, p);
     ctx.restore();
@@ -950,7 +1338,8 @@
     };
     drawSimBackdrop(b);
     const painters = {
-      spring: paintSpring, cart: paintCart, pendulum: paintPendulum, attitude: paintAttitude
+      spring: paintSpring, cart: paintCart, pendulum: paintPendulum, attitude: paintAttitude,
+      motor: paintMotor, tank: paintTank, pendulumDown: paintPendulumDown, altitude: paintAltitude
     };
     (painters[view.kind] || paintSpring)(b);
     drawSimReadout(b);

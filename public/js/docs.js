@@ -358,10 +358,13 @@
     function hold(html) { const idx = store.length; store.push(html); return H + String.fromCharCode(1 + idx); }
     function mathIn(text) { return math.renderMixed(text); }
     let t = String(s);
-    /* ① 同类方法跳转 / 外链 */
-    t = t.replace(/\[([^\]]+)\]\((method|https?):([^)]+)\)/g, function (m, label, proto, target) {
+    /* ① 同类方法跳转 / 对象手册 / 外链 */
+    t = t.replace(/\[([^\]]+)\]\((method|plant|https?):([^)]+)\)/g, function (m, label, proto, target) {
       if (proto === 'method') {
         return hold('<button type="button" class="doc-peer" data-doc="' + esc(target.trim()) + '">' + mathIn(label) + '</button>');
+      }
+      if (proto === 'plant') {
+        return hold('<button type="button" class="doc-peer" data-plant-doc="' + esc(target.trim()) + '">' + mathIn(label) + '</button>');
       }
       return hold('<a class="doc-link" href="' + esc(proto + ':' + target) + '" target="_blank" rel="noopener">' + mathIn(label) + '</a>');
     });
@@ -541,7 +544,7 @@
       '</article>';
   }
 
-  /* ── 专题导读（public/docs/guides/*.md → window.__GUIDES__） ──
+  /* ── 专题教程（public/docs/guides/*.md → window.__GUIDES__） ──
      与方法文档共用同一套 Markdown 渲染，但目录独立成一组，
      key 采用 'guide:<slug>' 前缀，避免与 159 个方法 key 冲突。 */
   const GUIDE_PREFIX = 'guide:';
@@ -556,7 +559,29 @@
     const meta = entry.meta || {};
     return '<article class="doc-article">' +
       '<div class="doc-hero">' +
-      '<span class="doc-kicker">专题导读 · ' + esc(meta.category || '') + '</span>' +
+      '<span class="doc-kicker">专题教程 · ' + esc(meta.category || '') + '</span>' +
+      '<h2 id="docs-title">' + esc(meta.title || slug) + '</h2>' +
+      (meta.summary ? '<p>' + esc(meta.summary) + '</p>' : '') +
+      '</div>' +
+      parseMd(entry.body) +
+      '</article>';
+  }
+
+  /* ── 对象手册（public/docs/plants/*.md → window.__PLANT_DOCS__） ──
+     key 采用 'plant:<slug>' 前缀，与方法 / 专题并列出现在目录顶部。 */
+  const PLANT_PREFIX = 'plant:';
+  function plantBundle() { return global.__PLANT_DOCS__ || {}; }
+  function isPlantKey(key) { return key.indexOf(PLANT_PREFIX) === 0; }
+
+  function renderPlantDoc(slug) {
+    const entry = plantBundle()[slug];
+    if (!entry) {
+      return '<p class="doc-p">对象手册尚未打包（请运行 <code>node tools/build-docs.js</code> 重新生成）。</p>';
+    }
+    const meta = entry.meta || {};
+    return '<article class="doc-article">' +
+      '<div class="doc-hero">' +
+      '<span class="doc-kicker">' + esc(meta.category || '对象手册') + '</span>' +
       '<h2 id="docs-title">' + esc(meta.title || slug) + '</h2>' +
       (meta.summary ? '<p>' + esc(meta.summary) + '</p>' : '') +
       '</div>' +
@@ -574,13 +599,24 @@
     if (!host) return;
     const guides = Object.keys(guideBundle()).map((slug) => guideBundle()[slug]);
     const guideGroup = guides.length
-      ? '<details class="doc-nav-group" open><summary><span class="chapter-no">★</span>专题导读</summary>' +
+      ? '<details class="doc-nav-group" open><summary><span class="chapter-no">★</span>专题教程</summary>' +
         guides.map((g) => '<button type="button" class="doc-nav-item' +
           (currentKey === GUIDE_PREFIX + g.meta.slug ? ' is-active' : '') +
           '" data-doc="' + esc(GUIDE_PREFIX + g.meta.slug) + '">' + esc(g.meta.title) + '</button>').join('') +
         '</details>'
       : '';
-    host.innerHTML = guideGroup + D.sortedCategories.map((cat, index) => {
+    const plantSlugs = Object.keys(plantBundle());
+    const plantGroup = plantSlugs.length
+      ? '<details class="doc-nav-group" open><summary><span class="chapter-no">◆</span>对象手册</summary>' +
+        plantSlugs.map((slug) => {
+          const m = plantBundle()[slug].meta || {};
+          return '<button type="button" class="doc-nav-item' +
+            (currentKey === PLANT_PREFIX + slug ? ' is-active' : '') +
+            '" data-doc="' + esc(PLANT_PREFIX + slug) + '">' + esc(m.title || slug) + '</button>';
+        }).join('') +
+        '</details>'
+      : '';
+    host.innerHTML = plantGroup + guideGroup + D.sortedCategories.map((cat, index) => {
       const items = (D.groupedMethods[cat] || []).map((m) =>
         '<button type="button" class="doc-nav-item' + (m.key === currentKey ? ' is-active' : '') +
         '" data-doc="' + esc(m.key) + '">' + esc(m.name) + '</button>').join('');
@@ -592,7 +628,9 @@
 
   function show(key, updateHash) {
     const guide = isGuideKey(key);
-    if (guide) { if (!guideBundle()[key.slice(GUIDE_PREFIX.length)]) return; }
+    const plant = isPlantKey(key);
+    if (plant) { if (!plantBundle()[key.slice(PLANT_PREFIX.length)]) return; }
+    else if (guide) { if (!guideBundle()[key.slice(GUIDE_PREFIX.length)]) return; }
     else if (!D.CONTROLLER_CONFIGS[key]) return;
     currentKey = key;
     const overlay = doc.getElementById('overlay-docs');
@@ -600,36 +638,71 @@
     overlay.hidden = false;
     const content = doc.getElementById('docs-content');
     if (content) {
-      content.innerHTML = guide ? renderGuide(key.slice(GUIDE_PREFIX.length)) : renderDoc(key);
+      content.innerHTML = plant ? renderPlantDoc(key.slice(PLANT_PREFIX.length))
+        : guide ? renderGuide(key.slice(GUIDE_PREFIX.length)) : renderDoc(key);
       content.scrollTop = 0;
     }
     renderNav();
     const counter = doc.getElementById('docs-counter');
     if (counter) {
-      counter.textContent = guide ? '专题导读'
+      counter.textContent = plant ? '对象手册'
+        : guide ? '专题教程'
         : '第 ' + (D.methodList.indexOf(key) + 1) + ' / ' + D.methodList.length + ' 讲';
     }
-    /* 专题不是「方法」，隐藏「用此方法做实验」 */
+    /* 专题与对象手册不是「方法」，隐藏「用此方法做实验」 */
     const useBtn = doc.getElementById('docs-use');
-    if (useBtn) useBtn.hidden = guide;
+    if (useBtn) useBtn.hidden = guide || plant;
     if (updateHash !== false) {
       try {
-        global.history.replaceState(null, '', guide
-          ? '#guide=' + encodeURIComponent(key.slice(GUIDE_PREFIX.length))
-          : '#doc=' + encodeURIComponent(key));
+        global.history.replaceState(null, '', plant
+          ? '#plant=' + encodeURIComponent(key.slice(PLANT_PREFIX.length))
+          : guide
+            ? '#guide=' + encodeURIComponent(key.slice(GUIDE_PREFIX.length))
+            : '#doc=' + encodeURIComponent(key));
       } catch (err) { /* file:// 限制时忽略 */ }
     }
   }
 
   let docsLastFocus = null;
-  function open(key) {
-    savedHash = global.location.hash || '';
-    docsLastFocus = doc.activeElement;
-    show(key || currentKey);
+  /* 教学文档包约 2.9 MB：改为按需注入，避免首屏阻塞。
+     首次打开阅读器（或空闲时预取）再加载 docs-content.js。 */
+  let docsLoading = false;
+  const docsQueue = [];
+  function ensureDocs(cb) {
+    if (global.__DOCS__ && global.__PLANT_DOCS__) { if (cb) cb(); return; }
+    if (cb) docsQueue.push(cb);
+    if (docsLoading) return;
+    docsLoading = true;
+    /* 方法正文与对象手册分别打包，按需依次注入 */
+    const scripts = [];
+    if (!global.__DOCS__) scripts.push('js/docs-content.js');
+    if (!global.__PLANT_DOCS__) scripts.push('js/plant-docs.js');
+    const done = () => {
+      docsLoading = false;
+      const queue = docsQueue.splice(0);
+      queue.forEach((fn) => { try { fn(); } catch (err) { console.warn(err); } });
+    };
+    let i = 0;
+    const loadNext = () => {
+      if (i >= scripts.length) { done(); return; }
+      const script = doc.createElement('script');
+      script.src = scripts[i++];
+      script.onload = loadNext;
+      script.onerror = loadNext;
+      doc.head.appendChild(script);
+    };
+    loadNext();
+  }
+  function focusReader() {
     const overlay = doc.getElementById('overlay-docs');
     if (overlay && NS.ui && NS.ui.trapFocus) NS.ui.trapFocus(overlay);
     const search = doc.getElementById('docs-search');
     if (search) setTimeout(() => search.focus(), 30);
+  }
+  function open(key) {
+    savedHash = global.location.hash || '';
+    docsLastFocus = doc.activeElement;
+    ensureDocs(() => { show(key || currentKey); focusReader(); });
   }
   function close() {
     const overlay = doc.getElementById('overlay-docs');
@@ -643,8 +716,8 @@
     catch (err) { /* 忽略 */ }
   }
   function stepDoc(delta) {
-    if (isGuideKey(currentKey)) {
-      /* 专题页：← → 回到方法正文的首/末讲 */
+    if (isGuideKey(currentKey) || isPlantKey(currentKey)) {
+      /* 专题 / 对象手册页：← → 回到方法正文的首/末讲 */
       show(delta > 0 ? D.methodList[0] : D.methodList[D.methodList.length - 1]);
       return;
     }
@@ -654,11 +727,24 @@
   }
   function openGuide(slug) {
     if (!guideBundle()[slug]) return;
-    open(GUIDE_PREFIX + slug);
+    savedHash = global.location.hash || '';
+    docsLastFocus = doc.activeElement;
+    show(GUIDE_PREFIX + slug);
+    focusReader();
+  }
+  /* 打开对象手册：public/docs/plants/*.md（由 build-docs.js 打包为 __PLANT_DOCS__） */
+  function openPlant(slug) {
+    if (!slug) return;
+    ensureDocs(() => {
+      savedHash = global.location.hash || '';
+      docsLastFocus = doc.activeElement;
+      show(PLANT_PREFIX + slug);
+      focusReader();
+    });
   }
   function useInLab() {
     const sim = NS.sim, ui = NS.ui, app = NS.app;
-    if (isGuideKey(currentKey)) return;
+    if (isGuideKey(currentKey) || isPlantKey(currentKey)) return;
     if (sim && ui) {
       sim.setMethod(currentKey);
       ui.setActiveMethod(currentKey);
@@ -690,6 +776,12 @@
       open(activeKey());
     });
     overlay.addEventListener('click', (ev) => {
+      const plantLink = ev.target.closest('[data-plant-doc]');
+      if (plantLink) {
+        const slug = plantLink.getAttribute('data-plant-doc');
+        if (slug) show(PLANT_PREFIX + slug);
+        return;
+      }
       const item = ev.target.closest('[data-doc]');
       if (item) { show(item.dataset.doc); return; }
       const toc = ev.target.closest('[data-toc]');
@@ -723,18 +815,27 @@
     const hash = /^#doc=(.+)$/.exec(global.location.hash || '');
     if (hash) {
       const key = decodeURIComponent(hash[1]);
-      if (D.CONTROLLER_CONFIGS[key]) { savedHash = ''; show(key, false); }
+      if (D.CONTROLLER_CONFIGS[key]) {
+        savedHash = '';
+        ensureDocs(() => show(key, false));
+      }
     }
     const ghash = /^#guide=(.+)$/.exec(global.location.hash || '');
     if (ghash) {
       const slug = decodeURIComponent(ghash[1]);
       if (guideBundle()[slug]) { savedHash = ''; show(GUIDE_PREFIX + slug, false); }
     }
+    const phash = /^#plant=(.+)$/.exec(global.location.hash || '');
+    if (phash) {
+      const slug = decodeURIComponent(phash[1]);
+      savedHash = '';
+      ensureDocs(() => show(PLANT_PREFIX + slug, false));
+    }
   }
 
   NS.docs = {
-    renderDoc, parseMd, mount, open, openGuide, close, show, useInLab,
-    analyzeLoop, polyRoots
+    renderDoc, parseMd, mount, open, openGuide, openPlant, close, show, useInLab,
+    analyzeLoop, polyRoots, ensureDocs
   };
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', mount, { once: true });

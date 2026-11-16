@@ -108,7 +108,7 @@
             "Twisting-2SMC": { category: "06. 滑模变结构控制家族", name: "Twisting 螺旋二阶滑模控制", desc: "最早的二阶滑模算法，利用 s 与 ṡ 的双符号切换在相平面走螺旋收敛轨迹。", eq: "u = u_{eq} + r_1 sgn(s) + r_2 sgn(ṡ) , (r_1 > r_2 > 0)", tuning: "必须满足 R1 > R2！观察中间的相空间轨迹图，状态会像收紧的发条一样沿螺旋线有限时间缩入原点。", params: {"c_surf":[5,0.5,15,0.5],"r1":[25,5,80,1],"r2":[10,1,40,1]}, detail: "【参数意义】\nr_1, r_2: 相平面象限非对称切换幅值 (r_1 > r_2)\n\n【底层机理】\n当 s 与 ṡ 同号（正在远离滑模面）时，输出 r_1+r_2 强力阻截；当 s 与 ṡ 异号（正在靠近滑模面）时，输出 r_1-r_2 减小推力，从而使相平面轨迹每一次穿越坐标轴时的半径严格按几何级数缩小。" },
             "LevantHOSM": { category: "06. 滑模变结构控制家族", name: "Levant 鲁棒精确微分滑模", desc: "通过高阶滑模精确微分器(HOSM Differentiator)在强噪声下无相位滞后提取导数。", eq: "ż_0 = -l_1 |z_0-e|^{1/2}sgn(z_0-e) + z_1 , ż_1 = -l_2 sgn(z_0-e)", tuning: "无惧传感器噪声。L1/L2是Levant微分器增益，可从含噪测量中有限时间精确重构速度信号。", params: {"l1":[12,1,50,1],"l2":[25,1,100,1],"c_surf":[5,0.1,20,0.1],"k_gain":[22,1,100,1]}, detail: "【参数意义】\nz_0, z_1: Levant二阶滑模微分器对误差及其一阶导数的实时无偏估计\n\n【底层机理】\n传统线性低通滤波求导必然带来相位滞后。Levant 基于超螺旋滑模构造出有限时间精确微分器，在无噪时能零误差提取真实导数，在有界噪声下具有最优渐近误差阶。" },
             "VariableG-SMC": { category: "06. 滑模变结构控制家族", name: "变增益滑模控制 (Variable-Gain SMC)", desc: "切换增益随状态误差范数动态缩放，远端狂暴回扯、近端温柔护航。", eq: "u = u_{eq} + (k_0 + k_1 |e|) sat(s / ε)", tuning: "K_1|e| 在远端获得高增益加速收敛，近端误差归零后仅留 K_0 保底抗扰，有效保护执行器。", params: {"c_surf":[5,0.1,20,0.1],"k0":[8,0.5,30,0.5],"k1":[12,0.5,50,0.5]}, detail: "【参数意义】\nk_0: 稳态基础抗扰增益\nk_1 |e|: 随偏差距离动态扩张的增益分量\n\n【底层机理】\n赋予滑模控制器空间尺度感：大偏差阶段需要高增益克服惯性与大范围未建模动态，进入稳态邻域后自动收缩切换幅值以降低稳态颤振。" },
-            "Boundary-Layer-Varying-SMC": { category: "06. 滑模变结构控制家族", name: "时变边界层滑模控制 (Slotine Varying-Φ)", desc: "Slotine经典改进：边界层厚度 Φ(t) 随状态动态变化，平衡时变带宽与跟踪精度。", eq: "u = u_{eq} + (K(x) - \\dot{Φ}) sat(s / Φ(t)) , \\dot{Φ} + λ Φ = K(target)", tuning: "MIT 学者 Slotine 专著《Applied Nonlinear Control》核心改进：动态调整边界层厚度 Φ(t)，削弱初始抖振并锁紧稳态精度。", params: {"lam_sl":[6,1,20,0.5],"k_max_sl":[25,5,80,1],"phi_min":[0.05,0.01,0.5,0.01]}, detail: "【参数意义】\nΦ(t): 满足一阶微分方程 Φ̇ + λΦ = K 的动态边界层厚度\n\n【底层机理】\n固定边界层 sat(s/ε) 只能按最坏情况选取较厚的 ε，牺牲了稳态精度。Slotine 提出令边界层厚度 Φ(t) 随运动剧烈程度动态呼吸伸缩，并把 -Φ̇ 修正项并入切换增益以严格维持滑模吸引条件 s·ṡ ≤ (Φ̇ - η)|s|。" },
+            "Boundary-Layer-Varying-SMC": { category: "06. 滑模变结构控制家族", name: "时变边界层滑模控制 (Slotine Varying-Φ)", desc: "Slotine经典改进：边界层厚度 $\\Phi$(t) 随状态动态变化，平衡时变带宽与跟踪精度。", eq: "u = u_{eq} + (K(x) - \\dot{Φ}) sat(s / Φ(t)) , \\dot{Φ} + λ Φ = K(target)", tuning: "MIT 学者 Slotine 专著《Applied Nonlinear Control》核心改进：动态调整边界层厚度 $\\Phi$(t)，削弱初始抖振并锁紧稳态精度。", params: {"lam_sl":[6,1,20,0.5],"k_max_sl":[25,5,80,1],"phi_min":[0.05,0.01,0.5,0.01]}, detail: "【参数意义】\nΦ(t): 满足一阶微分方程 Φ̇ + λΦ = K 的动态边界层厚度\n\n【底层机理】\n固定边界层 sat(s/ε) 只能按最坏情况选取较厚的 ε，牺牲了稳态精度。Slotine 提出令边界层厚度 $\\Phi$(t) 随运动剧烈程度动态呼吸伸缩，并把 -Φ̇ 修正项并入切换增益以严格维持滑模吸引条件 s·ṡ ≤ (Φ̇ - η)|s|。" },
             "Global-SMC": { category: "06. 滑模变结构控制家族", name: "全局滑模控制 (Global Sliding Mode)", desc: "在滑模面中减去初始状态指数衰减项 s(0)e^{-λt}，使轨迹从 t=0 时刻起100%位于滑模面上！", eq: "s(t) = (c·e - v) - (c·e(0) - v(0)) e^{-λ_{gsmc} t}", tuning: "Lam_gsmc 控制初始滑模偏置的指数归零速率。彻底消除了传统滑模的到达段(Reaching Phase)，全程鲁棒无超调！", params: {"c_surf":[5,0.5,15,0.5],"lam_gsmc":[4,0.5,15,0.5],"k_gain":[20,2,80,1]}, detail: "【参数意义】\n(c·e(0) - v(0)) e^{-λt}: 强制令初始时刻 s(0) ≡ 0 的指数衰减弯曲偏置项\n\n【底层机理】\nLu & Spurgeon 等发展的全局滑模控制(GSMC)。通过构造一条从初始状态点 (e(0), v(0)) 出发并按指数规律平滑汇入标准线性滑模面的时变流形，使系统从启动第 0 秒起就处于滑模运动状态。" },
             "HOSM-Quasi-Continuous": { category: "06. 滑模变结构控制家族", name: "准连续高阶滑模控制 (Quasi-Continuous HOSM)", desc: "Levant准连续滑模：控制律除二阶滑模原点 s=ṡ=0 外处处连续，抖振远低于传统滑模。", eq: "u = u_{eq} + α_{qc} (ṡ + β |s|^{1/2} sgn(s)) / (|ṡ| + β |s|^{1/2})", tuning: "观察公式中的有理分式结构：分子与分母具有相同的齐次度，使控制量在穿越 s=0 或 ṡ=0 时保持连续过渡！", params: {"c_surf":[5,0.5,15,0.5],"alpha_qc":[22,2,80,1],"beta_qc":[4,0.5,15,0.5]}, detail: "【参数意义】\n(ṡ + β|s|^{1/2}sgn(s)) / (|ṡ| + β|s|^{1/2}): 取值严格在 [-1, +1] 之间且除原点外处处连续的齐次有理切换函数\n\n【底层机理】\nLevant (2005) 提出的准连续高阶滑模(Quasi-Continuous HOSM)。传统高阶滑模在一维流形 s=0 上处处不连续，而准连续滑模仅在零测度的二维交点 (s=0, ṡ=0) 处不连续，因此在实际运动过程中控制信号极为柔顺。" },
             // === 【7. 自抗扰与扰动观测补偿】 ===
@@ -212,7 +212,7 @@
         const SLIDING_META = {
             SMC: {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'sat' },
-                phi: { label: '边界层厚度 Φ', unit: '', ...SLIDING_PHI, default: 0.1 }
+                phi: { label: '边界层厚度 $\\Phi$', unit: '', ...SLIDING_PHI, default: 0.1 }
             },
             'VSC-RL': {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'sat' },
@@ -220,7 +220,7 @@
             },
             ISMC: {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'sat' },
-                phi: { label: '边界层厚度 Φ', unit: '', ...SLIDING_PHI, default: 0.1 }
+                phi: { label: '边界层厚度 $\\Phi$', unit: '', ...SLIDING_PHI, default: 0.1 }
             },
             TSMC: {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'tanh' },
@@ -232,15 +232,15 @@
             },
             ASMC: {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'sat' },
-                phi: { label: '边界层厚度 Φ', unit: '', ...SLIDING_PHI, default: 0.1 }
+                phi: { label: '边界层厚度 $\\Phi$', unit: '', ...SLIDING_PHI, default: 0.1 }
             },
             'ESO-SMC': {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'sat' },
-                phi: { label: '边界层厚度 Φ', unit: '', ...SLIDING_PHI, default: 0.1 }
+                phi: { label: '边界层厚度 $\\Phi$', unit: '', ...SLIDING_PHI, default: 0.1 }
             },
             'VariableG-SMC': {
                 chatterMode: { label: '消抖模式', type: 'select', options: SLIDING_MODES, default: 'sat' },
-                phi: { label: '边界层厚度 Φ', unit: '', ...SLIDING_PHI, default: 0.5 }
+                phi: { label: '边界层厚度 $\\Phi$', unit: '', ...SLIDING_PHI, default: 0.5 }
             }
         };
 
@@ -272,13 +272,15 @@
             const c = pP.c || 0.5;
             const k = pP.k || 1.0;
             const mRatio = m / 2.0;
-            const wn_desired = cfg.plantType === 'pendulum' ? 4.8 : 4.2;
+            /* 目标带宽按对象时间尺度缩放：过程对象（tank）与大型航天器（satellite）
+               的物理带宽远低于标准二阶对象，沿用 4.2 rad/s 会把 Kp/Kd 抬到饱和区。 */
+            const wn_desired = (cfg.plantType === 'pendulum' ? 4.8 : 4.2) * (cfg.wnScale || 1);
             const zeta_desired = 1.05; /* 微过阻尼，压超调 */
             const hasDist = Math.abs(cfg.contDisturbance) > 0.5 || Math.abs(cfg.coulombFriction) > 0.5;
             const seed = { ...defParams };
             let ruleName = '极点配置与ITAE泛函联合寻优';
 
-            if (targetMethod === 'LQR' || targetMethod === 'LQG' || targetMethod === 'LQR-Servo-FF' || targetMethod === 'SDRE' || targetMethod === 'Infinite-Horizon-LQ') {
+            if (targetMethod === 'LQR' || targetMethod === 'LQG' || targetMethod === 'LQR-I' || targetMethod === 'LQR-Servo-FF' || targetMethod === 'SDRE' || targetMethod === 'Infinite-Horizon-LQ') {
                 ruleName = '连续代数黎卡提方程 (CARE) Butterworth 解析最优律';
                 if ('q_x' in seed) seed.q_x = Math.round(140 * mRatio);
                 if ('q_v' in seed) seed.q_v = Math.round(22 * mRatio);
@@ -286,6 +288,11 @@
                 if ('q1' in seed) seed.q1 = Math.round(140 * mRatio);
                 if ('q2' in seed) seed.q2 = Math.round(22 * mRatio);
                 if ('r' in seed) seed.r = 0.45;
+                /* 负刚度对象：Kp≈√(q_x) 必须大于 |k|，否则 LQR/LQR-I 开环化。
+                   q_x 至少取 2k²，保证 q_x 折算的比例增益有余量（E-09）。 */
+                if (k < 0 && 'q_x' in seed) {
+                    seed.q_x = Math.max(seed.q_x, Math.round(2.0 * k * k));
+                }
             } else if (targetMethod === 'ADRC' || targetMethod === 'NL-ADRC' || targetMethod === 'CasADRC' || targetMethod === 'F-ADRC' || targetMethod === 'ESO-SMC' || targetMethod === 'Nonlinear-Power-ADRC') {
                 ruleName = '高志强带宽参数化法 (ω_o = 3.5ω_c, b_0 = 1/m)';
                 const wc = cfg.plantType === 'pendulum' ? 6.0 : 5.2;
@@ -642,10 +649,21 @@
       "r_weight": 0.5
     },
     "LQG": {
-      "q_x": 50,
-      "q_v": 5,
+      "q_x": 88,
+      "q_v": 16.7,
       "r_w": 0.5
     },
+    /* V5.1 E-07：真实不稳定摆下经 30 s 复核得到的可行整定 */
+    "STR": { "gamma": 36, "wn": 9.3, "zeta": 1.3 },
+    "Composite-MRAC": { "gamma": 12, "g_pred": 30, "wn": 8 },
+    "NL-ADRC": { "w_o": 36, "w_c": 4, "b0": 1.1, "delta": 0.1 },
+    "PFC-Functional": { "tr_pfc": 0.1, "h_coin": 3, "kd_pfc": 3 },
+    "Mixed-H2-Hinf": { "gamma": 1.1, "q_perf": 340, "alpha_mix": 0.95 },
+    "BLF": { "kb": 2, "kp": 310, "kd": 19 },
+    "Gain-Margin-PID": { "ku_est": 300, "tu_est": 2.3 },
+    "Minimum-Energy": { "tf_hor": 0.3, "damp_me": 12 },
+    "Kalman-Pole": { "p_pole": 9.4, "q_kf": 0.55 },
+    "SDRE": { "q_weight": 500 },
     "H-Infinity": {
       "gamma": 1.1,
       "q_x": 50
@@ -691,11 +709,6 @@
       "w_c": 5,
       "b0": 2
     },
-    "NL-ADRC": {
-      "w_o": 5,
-      "w_c": 5,
-      "b0": 2
-    },
     "ILC": {
       "gamma_ilc": 1.8,
       "kp_base": 18
@@ -715,7 +728,50 @@
     "PI": {
       "kp": 3,
       "ki": 0.5
-    }
+    },
+    "H2-Optimal": { "q_h2": 400, "r_h2": 0.5, "ki_h2": 20 }
+  },
+  /* V5.1 E-28：姿态对象专用整定（此前缺失，仅靠全局覆盖兜底） */
+  "aircraft": {
+    "LevantHOSM": { "l1": 3, "l2": 25, "c_surf": 5, "k_gain": 16 },
+    "Repetitive": { "k_rc": 0.1, "q_filter": 0.5 }
+  },
+  "missile": {
+    "BangBang": { "force": 27 },
+    "STR": { "gamma": 11, "wn": 10, "zeta": 0.9 },
+    "Composite-MRAC": { "gamma": 50, "g_pred": 30, "wn": 8 },
+    "Repetitive": { "k_rc": 0.4, "q_filter": 0.53 }
+  },
+  "uav": {
+    "LevantHOSM": { "l1": 48, "l2": 17, "c_surf": 2.8, "k_gain": 1 },
+    "Repetitive": { "k_rc": 0.5, "q_filter": 0.53 }
+  },
+  /* ── V5.2 新增五对象的专用整定 ───────────────────────────────
+     只覆盖理论种子在这些对象上明显失配的方法；未列出的方法沿用种子。 */
+  "motor": {
+    "LevantHOSM": { "l1": 4, "l2": 18, "c_surf": 8.2, "k_gain": 3 }
+  },
+  "tank": {
+    "LevantHOSM": { "l1": 3, "l2": 14, "c_surf": 3.5, "k_gain": 1 }
+  },
+  "pendulumDown": {
+    "iPID": { "alpha": 3, "kp": 100, "kd": 16.7, "tau": 0.02 },
+    "Corless-Leitmann": { "kp_nom": 100, "rho_bound": 1, "eps_c": 1 },
+    "HOSM-Quasi-Continuous": { "c_surf": 0.5, "alpha_qc": 4, "beta_qc": 0.5 },
+    "ARC": { "gamma": 20, "c": 11.7, "k_s": 9, "k_n": 1 },
+    "LevantHOSM": { "l1": 2, "l2": 5, "c_surf": 11, "k_gain": 1 },
+    "TubeMPC": { "t_pred": 0.2, "lambda": 0.01, "k_anc": 1 },
+    "Stochastic-MPC": { "t_pred": 0.15, "risk_p": 0.1, "sigma_w": 0.2 }
+  },
+  "satellite": {
+    "PI": { "kp": 20, "ki": 0.15 },
+    "NL-ADRC": { "w_o": 30, "w_c": 10, "b0": 0.1, "delta": 0.1 },
+    "Lag-Compensator": { "kc": 12, "zero": 1, "pole": 0.62, "kd": 30 },
+    "SuperTwisting": { "c": 2.3, "lambda": 30, "W": 17 },
+    "LevantHOSM": { "l1": 1, "l2": 5, "c_surf": 0.4, "k_gain": 34 }
+  },
+  "uavAlt": {
+    "LevantHOSM": { "l1": 6, "l2": 40, "c_surf": 5.5, "k_gain": 4 }
   }
 };
 
@@ -850,63 +906,169 @@
       desc: '同一控制器换成 sat 边界层：切换项在 ±K 内连续变化，纹波与开关频率同时大幅下降，代价是边界层内出现微小静差。',
       method: 'SMC', plant: 'msd', ctrl: { chatterMode: 'sat', phi: 0.1 },
       phys: { ...DEFAULT_PHYS }, env: { ...DEFAULT_ENV }
+    },
+
+    /* ── V5.2 新增五对象的场景预设（每对象 2 条） ───────────────────── */
+    {
+      id: 'motor-p', tag: '机电入门', title: '伺服电机 · 纯 P 也能停住',
+      desc: 'J=0.8、b=1.2 的电机位置环带阻尼，纯 P 控制就能无静差停住（直流增益 1），只是响应偏慢。与「二阶积分器」对照：那边 b=0，纯 P 只会等幅振荡。',
+      method: 'P', plant: 'motor', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 1.2 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'motor-sat', tag: '约束', title: '伺服电机 · 力矩限幅与超调',
+      desc: '把力矩限幅压到 3 N·m（额定值的 1/4）：大阶跃时执行器先饱和，积分项继续蓄能，误差反向后出现明显超调。观察「执行器饱和」徽章与恢复时间。',
+      method: 'PID', plant: 'motor', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 1.2 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', actuatorLimit: 3 }
+    },
+    {
+      id: 'tank-pi', tag: '流程工业', title: '双容液位 · PI 消静差',
+      desc: '过阻尼二阶过程（ζ=1.03），怎么调都不会振荡。纯 P 会因对象自身回复力留下静差；加 I 把液位磨到 0.6 m，观察"慢但不振荡"的典型过程响应。',
+      method: 'PI', plant: 'tank', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.6 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'tank-delay', tag: '纯滞后', title: '双容液位 · 1.2 s 纯滞后',
+      desc: '给回路加 1.2 s 纯滞后，再用 PID：相位裕度被吃掉，增益一高就振荡。切到 SmithPredict / IMC，模型里显式含滞后与惯性，同样的增益就能稳住。',
+      method: 'PID', plant: 'tank', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.6 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', plantDelay: 60 }
+    },
+    {
+      id: 'pendulum-down-free', tag: '自由响应', title: '下垂单摆 · 轻阻尼自由摆动',
+      desc: '不开控制，把摆从竖直偏 0.4 rad 放开：重力矩把它拉回零位（k>0，开环稳定），但阻尼比只有 0.036，会来回摆很久才衰减。',
+      method: 'OpenLoop', plant: 'pendulumDown', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', initialX: 0.4 }
+    },
+    {
+      id: 'pendulum-down-pd', tag: '机械振动', title: '下垂单摆 · PD 快速镇定',
+      desc: '同一轻阻尼单摆，加 D 项注入电子阻尼后约 1.2 s 停到 0.3 rad（约 17°）。注意「稳态保持力矩」≈1.16 N·m：这是重力矩，必须持续供给。',
+      method: 'PD', plant: 'pendulumDown', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.3 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'sat-timeoptimal', tag: '航天器', title: '卫星姿态 · 时间最优开关',
+      desc: '近无阻尼双积分器（J=12，c=0.12，限幅 6 N·m）。时间最优控制在相平面开关曲线上切换，先加速后减速；数一数开关次数——每次切换都是一次喷气。',
+      method: 'TimeOptimal', plant: 'satellite', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.2 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'sat-lqr', tag: '航天器', title: '卫星姿态 · LQR 平滑机动',
+      desc: '同一卫星换成 LQR：反馈同时整形刚度和阻尼，机动更平滑、纹波更低，代价是到位时间比时间最优长。对比「纹波 σu」可直观看到燃料与速度的折衷。',
+      method: 'LQR', plant: 'satellite', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 0.2 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'uav-alt-pid', tag: '无人机', title: '四旋翼高度 · PID 爬升',
+      desc: '悬停配平推力 mg 由对象层前馈提供，控制器只给推力增量 ΔT。2 m 爬升过程中观察高度、垂向速度与推力增量三者的相位关系。',
+      method: 'PID', plant: 'uavAlt', ctrl: {}, phys: { ...DEFAULT_PHYS, target: 2.0 },
+      env: { ...DEFAULT_ENV, targetMode: 'step' }
+    },
+    {
+      id: 'uav-alt-trim-loss', tag: '静差', title: '四旋翼高度 · 配平前馈缺失',
+      desc: '用持续扰动模拟"没配平"（滑条 -15 按量纲折算为 -3 N）：$K_p=10$ 时纯 P 会停在 2 − 3/10 = 1.70 m，静差 0.30 m。切到 PI 或加大 Kp，观察静差如何被吃掉。',
+      method: 'P', plant: 'uavAlt', ctrl: { kp: 10 }, phys: { ...DEFAULT_PHYS, target: 2.0 },
+      env: { ...DEFAULT_ENV, targetMode: 'step', contDisturbance: -15 }
     }
   ];
 
   /* ── 参数中文名 / 单位 / 分组（仅影响展示，不影响算法） ── */
   const PARAM_LABELS = {
-    kp: '比例增益 Kp', ki: '积分增益 Ki', kd: '微分增益 Kd', b: '设定值权重 b',
-    u_static: '前馈缩放系数 k', p1: '期望极点 p₁', p2: '期望极点 p₂',
-    q_x: '位置误差惩罚 Qx', q_v: '速度惩罚 Qv', r_weight: '能量惩罚 R',
-    r_w: '滤波权重 Rw', q_i: '积分惩罚 Qi', t_pred: '预测视野 t_pred',
-    lambda: '控制代价 λ', kp_scale: '离散退化因子', gamma: '干扰上界 / 学习率 γ',
-    gain: '补偿器增益', zero: '补偿器零点 z', pole: '补偿器极点 p',
-    q_e: '误差积分惩罚 Qe', r_u: '输入惩罚 Ru', k_prev: '预见前馈增益',
-    force: '最大推力 Fmax', zone: '切换边界 Zone', deadzone: '滞回死区 d',
-    c1: '第一层增益 c₁', c2: '第二层增益 c₂', c_surface: '滑模面系数 c',
-    c_surf: '滑模面系数 c', k_gain: '鲁棒切换增益 K', eps: '边界层厚度 ε',
-    eps0: '事件触发基线 ε₀', k_rl: '指数趋近增益', beta: '终端面系数 β',
-    alpha: '分数次幂 α', q: '终端幂次 q', gamma_sg: '梯度下降速率',
-    k0: '保底切换增益 k₀', k1: '远端膨胀增益 k₁', k2: '非线性幂增益 k₂',
-    k_aw: '抗饱和反算系数 Ka', k_nd: '非线性阻尼系数',
-    m_nom: '名义质量估计', tau: '滤波时间常数 τ', delta: '线性区宽度 δ',
-    rho: '自适应步长 ρ', eta: '学习率 η', mu: '正则因子 μ',
+    kp: '比例增益 $K_p$', ki: '积分增益 $K_i$', kd: '微分增益 $K_d$', b: '设定值权重 $b$',
+    u_static: '前馈缩放系数 $k_u$', p1: '期望极点 $p_1$', p2: '期望极点 $p_2$',
+    q_x: '位置误差惩罚 $Q_x$', q_v: '速度惩罚 $Q_v$', r_weight: '控制能量惩罚 $R$',
+    r_w: '滤波权重 $R_w$', q_i: '积分惩罚 $Q_i$', t_pred: '预测视野 $t_{pred}$',
+    lambda: '控制代价 $\\lambda$', kp_scale: '离散退化因子', gamma: '干扰上界 / 学习率 $\\gamma$',
+    gain: '补偿器增益', zero: '补偿器零点 $z$', pole: '补偿器极点 $p$',
+    q_e: '误差积分惩罚 $Q_e$', r_u: '输入惩罚 $R_u$', k_prev: '预见前馈增益',
+    force: '最大推力 $F_{max}$', zone: '切换边界 $\\delta_z$', deadzone: '滞回死区 $d$',
+    c1: '第一层增益 $c_1$', c2: '第二层增益 $c_2$', c_surface: '滑模面系数 $c_s$',
+    c_surf: '滑模面系数 $c_s$', k_gain: '鲁棒切换增益 $K$', eps: '边界层厚度 $\\varepsilon$',
+    eps0: '事件触发基线 $\\varepsilon_0$', k_rl: '指数趋近增益', beta: '终端面系数 $\\beta$',
+    alpha: '分数次幂 $\\alpha$', q: '终端幂次 $q$', gamma_sg: '梯度下降速率',
+    k0: '保底切换增益 $k_0$', k1: '远端膨胀增益 $k_1$', k2: '非线性幂增益 $k_2$',
+    k_aw: '抗饱和反算系数 $K_{aw}$', k_nd: '非线性阻尼系数',
+    m_nom: '名义质量估计', tau: '滤波时间常数 $\\tau$', delta: '线性区宽度 $\\delta$',
+    rho: '自适应步长 $\\rho$', eta: '学习率 $\\eta$', mu: '正则因子 $\\mu$',
     alpha_a: '演员学习率', alpha_c: '评论家学习率', gamma_rl: '折扣因子',
-    gamma_p: 'P 通道学习率', gamma_d: 'D 通道学习率', kp0: '初始 Kp',
-    ki0: '初始 Ki', kd0: '初始 Kd', range: '参数浮动范围',
-    w_o: '观测器带宽 ωo', w_c: '控制器带宽 ωc', b0: '系统增益估计 b₀',
-    wo: '观测器带宽 ωo', wc: '控制器带宽 ωc', n_lr: '神经网络学习率',
-    k_s: '自适应反馈增益', k_n: '鲁棒切换项', wn: '参考模型频率 ωn',
-    zeta: '参考阻尼比 ζ', t_lpf: '低通滤波时间常数',
-    rho_0: '漏斗初始高度 ρ₀', rho_inf: '漏斗终值 ρ∞', l: '漏斗收缩速率 L',
-    kb: '安全边界 kb', kb0: '初始边界 kb0', kb_inf: '边界终值',
-    kb_i: '积分器容量上限', lb: '边界收缩速率', sigma: '相对触发容差 σ',
+    gamma_p: 'P 通道学习率 $\\gamma_p$', gamma_d: 'D 通道学习率 $\\gamma_d$', kp0: '初始比例增益 $K_{p0}$',
+    ki0: '初始积分增益 $K_{i0}$', kd0: '初始微分增益 $K_{d0}$', range: '参数浮动范围',
+    w_o: '观测器带宽 $\\omega_o$', w_c: '控制器带宽 $\\omega_c$', b0: '系统增益估计 $b_0$',
+    wo: '观测器带宽 $\\omega_o$', wc: '控制器带宽 $\\omega_c$', n_lr: '神经网络学习率',
+    k_s: '自适应反馈增益', k_n: '鲁棒切换项', wn: '参考模型频率 $\\omega_n$',
+    zeta: '参考阻尼比 $\\zeta$', t_lpf: '低通滤波时间常数',
+    rho_0: '漏斗初始高度 $\\rho_0$', rho_inf: '漏斗终值 $\\rho_\\infty$', l: '漏斗收缩速率 $L$',
+    kb: '安全边界 $k_b$', kb0: '初始安全边界 $k_{b0}$', kb_inf: '边界终值',
+    kb_i: '积分器容量上限', lb: '边界收缩速率', sigma: '相对触发容差 $\\sigma$',
     p_fast: '激进档极点', p_slow: '保守档极点', dwell: '最小驻留时间',
     p_max: '远端极点', p_min: '近端极点', alpha_p: '极点游移敏捷度',
-    Tp: '预设收敛时间 Tp', p_q: '大误差幂次 p/q', r_s: '小误差幂次 r/s',
-    k_esc: '寻优反馈增益', omega: '探测信号频率 ω', amp: '探测信号幅值',
+    Tp: '预设收敛时间 $T_p$', p_q: '大误差幂次 $p/q$', r_s: '小误差幂次 $r/s$',
+    k_esc: '寻优反馈增益', omega: '探测信号频率 $\\omega$', amp: '探测信号幅值',
     a_A: '杏仁核学习率', a_O: '眶额皮层学习率', w_e: '误差感觉权重',
     w_v: '速度感觉权重', step_nr: '牛顿迭代步长', gamma_ilc: '迭代学习率',
     gamma_ilc_base: '基础增益', kp_base: '基础比例增益',
-    k_rc: '重复控制增益', q_filter: '重复滤波器 Q', kp_far: '远端 Kp',
-    kp_near: '近端 Kp', bnd: '调度边界', delay_t: '预估迟延时间',
-    k_pos: 'Posicast 对冲比', td: '半周期延时', K: '神经元缩放因子',
+    k_rc: '重复控制增益', q_filter: '重复滤波器 $Q$', kp_far: '远端比例增益 $K_{p,far}$',
+    kp_near: '近端比例增益 $K_{p,near}$', bnd: '调度边界', delay_t: '预估迟延时间',
+    k_pos: 'Posicast 对冲比 $K_{pos}$', td: '半周期延时', K: '神经元缩放因子',
     ke: '误差量化因子', kec: '误差变化量化因子', k_d: '虚拟弹簧刚度',
-    r_d0: '基底阻尼 R0', r_d1: '非线性阻尼 R1', t_pred_mpc: 'MPC 预测视野',
-    k_anc: '辅助镇定增益', q_weight: '状态惩罚权重', ny: '预测视野 Ny',
-    nu: '控制视野 Nu', lam: 'GPC 控制权重', rls_lambda: 'RLS 遗忘因子',
+    r_d0: '基底阻尼 $R_{d0}$', r_d1: '非线性阻尼 $R_{d1}$', t_pred_mpc: 'MPC 预测视野 $T_{pred}$',
+    k_anc: '辅助镇定增益', q_weight: '状态惩罚权重', ny: '预测视野 $N_y$',
+    nu: '控制视野 $N_u$', lam: 'GPC 控制权重 $\\lambda$', rls_lambda: '遗忘因子 $\\lambda_{RLS}$',
     w_bw: '闭环带宽', kp_nom: '名义比例增益', gamma_rd: '鲁棒阻尼注入',
-    l_obs: '观测器增益 L', l_gain: '观测器增益 L', q_cov: '过程噪声协方差 Q',
-    r_cov: '测量噪声协方差 R', p_num: '粒子数量', l1: '精确微分器 L1',
-    l2: '精确微分器 L2', delay_a: '网络迟延拍数', q_step: '量化阶梯宽度',
-    et_limit: '事件触发门槛 δ', mu_fo: '分数阶阶次', kd_out: '微分通道增益',
-    gamma_m: '质量自适应率', w_bias: 'Bias 学习率', k_damp: '阻尼系数',
+    l_obs: '观测器增益 $L$', l_gain: '观测器增益 $L$', q_cov: '过程噪声协方差 $Q$',
+    r_cov: '测量噪声协方差 $R$', p_num: '粒子数量', l1: '精确微分器增益 $\\ell_1$',
+    l2: '精确微分器增益 $\\ell_2$', delay_a: '网络迟延拍数', q_step: '量化阶梯宽度',
+    et_limit: '事件触发门槛 $\\delta$', mu_fo: '分数阶阶次', kd_out: '微分通道增益',
+    gamma_m: '质量自适应率', w_bias: '偏置学习率 $w_{bias}$', k_damp: '阻尼系数',
     q_step_quant: '量化步长', delta_aw: '抗饱和系数',
-    rho_ppc: '漏斗高度', gamma_aw: '自适应增益', alpha_rbf: 'RBF 学习率'
+    rho_ppc: '漏斗高度', gamma_aw: '自适应增益', alpha_rbf: 'RBF 学习率 $\\alpha_{RBF}$',
+    /* ── V5.1 补齐：此前缺失的 128 个参数键（按方法语义命名） ── */
+    kp_out: '外环比例增益 $K_{p,out}$', kp_in: '内环比例增益 $K_{p,in}$', ki_in: '内环积分增益 $K_{i,in}$',
+    eps_sep: '积分分离阈值 $\\varepsilon_{sep}$', alpha_vr: '变速积分指数 $\\alpha$', n_filt: '微分滤波系数 $N_f$',
+    db_width: '死区宽度 $\\delta$', max_rate: '目标最大速率 $v_{max}$', boost: '专家增益倍率',
+    k_pp: '位置环比例 $K_{pp}$', k_vp: '速度环比例 $K_{vp}$', k_vi: '速度环积分 $K_{vi}$',
+    tf_d: '微分滤波时间常数 $T_f$', ku_est: '临界增益估计 $K_u$', tu_est: '临界周期估计 $T_u$',
+    lambda_c: '闭环时间常数 $\\lambda_c$', ki_trim: '积分微调系数', kc: '滞后补偿增益 $K_c$',
+    z_lead: '超前零点 $z$', p_lead: '超前极点 $p$', z_lag: '滞后零点 $z$',
+    w_notch: '陷波中心频率 $\\omega_{notch}$', zeta_n: '陷波深度 $\\zeta_n$', kr: '谐振增益 $K_r$',
+    w0: '谐振频率 $\\omega_0$', ki1: '一阶积分增益 $K_{i1}$', ki2: '二阶积分增益 $K_{i2}$',
+    ka: '加速度反馈 $K_a$', tau1: '中频时间常数 $\\tau_1$', kh: '高频阻尼 $K_h$',
+    z_dl: '双级超前零点 $z$', p_dl: '双级超前极点 $p$', p_pole: '期望极点 $p$',
+    q_kf: '卡尔曼过程噪声 $Q$', tf_hor: '能量规划时域 $T_f$', damp_me: '最小能量阻尼',
+    q_lqt: '轨迹位置权重 $Q$', r_lqt: '轨迹控制权重 $R$', kv_ff: '速度前馈 $K_{v,ff}$',
+    u_max_p: '饱和限幅 $u_{max}$', alpha_ptos: '折扣因子 $\\alpha$', k2_ptos: '速度增益 $K_2$',
+    q_h2: 'H2 位置权重 $Q$', r_h2: 'H2 控制权重 $R$', ki_h2: 'H2 积分增益 $K_i$',
+    q_perf: '性能权重 $Q$', alpha_mix: '混合因子 $\\alpha$', k_mu: 'μ 综合增益 $K_\\mu$',
+    d_scale: '扰动尺度 $d$', w_ro: '鲁棒观测带宽 $\\omega_o$', w1_gain: '增益通道权重 $W_1$',
+    w1_int: '积分通道权重 $W_1$', w2_damp: '阻尼通道权重 $W_2$', m_max_bound: '质量上界 $m_{max}$',
+    wn_rob: '鲁棒自然频率 $\\omega_n$', zeta_rob: '鲁棒阻尼比 $\\zeta$', rho_bound: '鲁棒边界 $\\rho$',
+    eps_c: '收敛阈值 $\\varepsilon_c$', q_gc: '广义控制权重 $Q$', eps_gc: '广义控制阈值 $\\varepsilon$',
+    delta_b: '边界厚度 $\\delta$', rho_pass: '无源性裕度 $\\rho$', kp_pass: '无源比例增益 $K_p$',
+    ki_pass: '无源积分增益 $K_i$', alpha_ref: '参考滤波 $\\alpha$', r_dmc: 'DMC 控制权重 $r$',
+    kd_dmc: 'DMC 微分增益 $K_d$', h_horizon: 'DMC 时域 $H$', lambda_mac: 'MAC 权重 $\\lambda$',
+    kd_mac: 'MAC 微分增益 $K_d$', tr_pfc: 'PFC 上升时间 $T_r$', h_coin: 'PFC 预测步长 $h$',
+    kd_pfc: 'PFC 微分增益 $K_d$', k_inner: '内环增益 $K_{in}$', k_outer: '外环增益 $K_{out}$',
+    poly_bnd: '分段边界', risk_p: '风险概率 $p$', sigma_w: '扰动标准差 $\\sigma_w$',
+    w_bound: '扰动上界 $w_{max}$', chatterMode: '消抖模式', phi: '边界层厚度 $\\Phi$',
+    k_pr: '幂次增益 Kpr', alpha_pr: '幂次指数 $\\alpha$', beta1: '滑模系数 $\\beta_1$',
+    beta2: '滑模系数 $\\beta_2$', gamma2: '二阶滑模增益 $\\gamma_2$', c: '滑模面系数 c',
+    W: '超螺旋增益 W', r1: '快速终端系数 r1', r2: '快速终端系数 r2',
+    lam_sl: '滑模面系数 $\\lambda$', k_max_sl: '切换增益上界 Kmax', phi_min: '最小边界层 $\\Phi_{min}$',
+    lam_gsmc: '全局滑模系数 $\\lambda$', alpha_qc: '准连续指数 $\\alpha$', beta_qc: '准连续指数 $\\beta$',
+    delay_d: '延迟步数 d', k_uio: 'UIO 增益 K', w_gpi: 'GPI 观测带宽 $\\omega$',
+    t_ude: 'UDE 时间常数 T', m_est: '质量估计 m̂', w_eid: 'EID 观测带宽 $\\omega$',
+    l_eid: 'EID 增益 L', kv: '速度反馈 Kv', c_syn: '协同系数 c',
+    t_syn: '协同时间常数 T', alpha_th: '阈值系数 $\\alpha$', t_plan: '规划时间 T',
+    gamma_mit: 'MIT 自适应增益 $\\gamma$', gamma_n: '神经自适应增益 $\\gamma$', kp_n: '神经比例增益 $K_{p,n}$',
+    kd_n: '神经微分增益 $K_{d,n}$', g_pred: '预测增益 g', eta_cmac: 'CMAC 学习率 $\\eta$',
+    kp_cmac: 'CMAC 比例增益 $K_{p,cmac}$', kd_cmac: 'CMAC 微分增益 $K_{d,cmac}$', a_spsa: 'SPSA 步长 a',
+    c_spsa: 'SPSA 扰动幅度 c', kp_init: '初始比例增益 $K_{p0}$', m_bw: '模型带宽 $\\omega$',
+    lr_vrft: 'VRFT 学习率', kd_base: '基础微分增益 $K_{d0}$', kf: '前馈增益 Kf',
+    phi0: '初始边界层 $\\Phi_0$', phi_inf: '稳态边界层 $\\Phi_\\infty$', lam_f: '滤波系数 $\\lambda_f$',
+    vmax_safe: '安全速度 vmax', alpha_cbf: 'CBF 系数 $\\alpha$'
   };
 
   const PARAM_UNITS = {
-    force: 'N', zone: 'm', deadzone: 'm', eps: 'm', kb: 'm', kb0: 'm',
+    force: 'N', zone: 'm', deadzone: 'm', eps: '', phi: '', kb: 'm', kb0: 'm',
     kb_inf: 'm', rho_0: 'm', rho_inf: 'm', t_pred: 's', tau: 's',
     t_lpf: 's', Tp: 's', dwell: 's', delay_t: 's', td: 's',
     contDisturbance: 'N', actuatorLimit: 'N', actuatorDeadzone: 'N',
@@ -933,7 +1095,7 @@
       id: 'cart', title: '小车位置闭环（进阶）', source: 'env',
       hint: '',
       items: [
-        { key: 'balanceAssist', label: '摆平衡辅助', type: 'select', options: [{ value: 'on', label: '开启（教学稳定：所有方法都能稳摆）' }, { value: 'off', label: '关闭（真实不稳定摆，P/PI/开环会失稳）' }] },
+        { key: 'balanceAssist', label: '摆平衡辅助', type: 'select', options: [{ value: 'on', label: '开启（教学稳定：显式辅助 PI 参与，所有方法都能稳摆）' }, { value: 'off', label: '关闭（真实不稳定摆；开环与部分内模/预测类会失稳）' }] },
         { key: 'cartLoop', label: '位置闭环', type: 'select', options: [{ value: 'off', label: '关闭（仅镇定摆角）' }, { value: 'on', label: '开启（串级：位置→倾角）' }] },
         { key: 'cartTarget', label: '小车目标位置 x_ref', unit: 'm', min: -3, max: 3, step: 0.1 },
         { key: 'cartKp', label: '外环比例 Kx', unit: 'rad/m', min: 0.05, max: 2, step: 0.05 },
@@ -978,7 +1140,7 @@
   const GRAVITY = 9.81;
   const PLANTS = {
     msd: {
-      id: 'msd', name: '质量-弹簧-阻尼', short: '二阶线性 · 稳定', category: '机械平移', order: 2,
+      id: 'msd', name: '质量-弹簧-阻尼', short: '二阶线性 · 稳定', category: '机械平移', order: 2, doc: 'msd',
       tex: 'm\\ddot{x}+c\\dot{x}+kx=u', inputSymbol: 'u', inputUnit: 'N',
       desc: '最经典的二阶机械对象：质量块 $m$ 连着弹簧（刚度 $k$）与阻尼器（黏性系数 $c$），控制力 $u$ 直接作用在质量块上。弹簧回复力 $kx$ 总把质量块往原点拉，因此停在非零目标需要持续的保持力 $u_h=k\\cdot r$——这正是「累计能耗」与「动态能耗」两种口径差异的来源。',
       unit: 'm', vUnit: 'm/s', defaultTarget: 5, defaultInitialX: 0, defaultActuatorLimit: 200,
@@ -994,7 +1156,7 @@
       restoring: (s, p) => p.k * s.x
     },
     freeMass: {
-      id: 'freeMass', name: '二阶积分器', short: '二阶 · 无回复力', category: '机械平移', order: 2,
+      id: 'freeMass', name: '二阶积分器', short: '二阶 · 无回复力', category: '机械平移', order: 2, doc: 'freeMass',
       tex: 'm\\ddot{x}=u', inputSymbol: 'u', inputUnit: 'N',
       desc: '没有弹簧、没有阻尼的自由质点：位置是控制力 $u$ 的二重积分，故称二阶积分器。撤掉控制力后速度不会衰减，纯 P 控制只会等幅振荡，必须靠微分（D）注入「电子阻尼」才能收敛。它是检验控制律结构最干净的试金石，也是姿态通道的等效模型。',
       unit: 'm', vUnit: 'm/s', defaultTarget: 5, defaultInitialX: 0, defaultActuatorLimit: 200,
@@ -1008,7 +1170,7 @@
       restoring: () => 0
     },
     pendulum: {
-      id: 'pendulum', name: '倒立摆（小车-摆）', short: '二阶 · 开环不稳定', category: '欠驱动系统', order: 2,
+      id: 'pendulum', name: '倒立摆（小车-摆）', short: '二阶 · 开环不稳定', category: '欠驱动系统', order: 2, doc: 'pendulum',
       tex: '\\ddot{\\theta}=\\frac{(M+m)g}{M l}\\theta-\\frac{c}{M l}\\dot{\\theta}+\\frac{1}{M l}F',
       desc: '小车托着一根竖直向上的摆杆：重力不是把它拉回竖直，而是把任何微小偏离越推越大——开环极点在右半平面，不控必倒。控制量是作用在小车上的水平推力 $F$，通过小车移动「间接」扶正摆杆，摆杆转动与小车平动联立积分。目标角非零时不存在静止平衡点，维持倾角需要持续的小车加速度。',
       unit: 'rad', vUnit: 'rad/s', inputSymbol: 'F', inputUnit: 'N',
@@ -1043,7 +1205,7 @@
        effective() 只要把 J/c/k 映射到 m/c/k 即可复用全部算法与指标。 */
     aircraft: {
       id: 'aircraft', name: '飞机（俯仰姿态）', short: '二阶 · 静稳定，带气动阻尼', category: '姿态控制',
-      order: 2,
+      order: 2, doc: 'aircraft',
       tex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M,\\quad k>0',
       effTex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M',
       desc: '升降舵偏转产生的俯仰力矩 $M$ 让机头绕俯仰轴转动。机身上有气动阻尼 $c\\dot{\\theta}$，气流还把机头往"对准来流"的方向拉，因此 $k>0$ 是**静稳定**的：撒手之后飞机自己会慢慢回到平飞，控制器只是让它**更快、更准**地到位。',
@@ -1069,7 +1231,7 @@
     },
     missile: {
       id: 'missile', name: '导弹（俯仰姿态）', short: '二阶 · 静不稳定，开环发散', category: '姿态控制',
-      order: 2,
+      order: 2, doc: 'missile',
       tex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M,\\quad k<0',
       effTex: 'J\\ddot{\\theta}+c\\dot{\\theta}+k\\theta=M',
       desc: '细长弹体的气动中心常位于重心之前，气动力矩是**正反馈**：偏得越多，偏得越快。因此 $k<0$，开环极点 $\\pm\\sqrt{|k|/J}$ 有一个落在右半平面，撒手就翻。舵面力矩 $M$ 必须持续把弹体拽住——这是"反馈不是可选项，而是生存必需品"的最直白例子。',
@@ -1094,7 +1256,7 @@
     },
     uav: {
       id: 'uav', name: '四旋翼（滚转姿态）', short: '二阶 · 无力矩回复', category: '姿态控制',
-      order: 2,
+      order: 2, doc: 'uav',
       tex: 'J\\ddot{\\phi}+c\\dot{\\phi}=M',
       effTex: 'J\\ddot{\\phi}+c\\dot{\\phi}=M\\quad(k=0)',
       desc: '四旋翼靠两侧电机转速差产生滚转力矩 $M$，机体本身**没有**任何气动回中力矩（$k=0$）：滚转多少度就停在那儿，是一个带阻尼的双积分器。纯 P 控制会等幅漂移，必须靠 D 项注入"电子阻尼"，这与「二阶积分器」对象是同一类脾气，只是量纲换成了角度。',
@@ -1116,6 +1278,123 @@
           '把 $c$ 拉到 0 附近，再用 PD 控制器扫 $K_d$：$K_d$ 越大"电子阻尼"越强（超调越小），但过大会放大传感器噪声。这就是飞控里"角速率环"必须存在的理由。'
       }
     },
+
+    /* ── V5.2 新增五对象（S4）：全部写成 m·ẍ + c·ẋ + k·x = u 的同构形式 ──
+       wnScale：该对象的时间尺度相对「二阶标准对象」的缩放系数，
+       只影响理论最优种子里 Kp/Kd 的目标带宽，不改变物理方程。 */
+    motor: {
+      id: 'motor', name: '直流伺服电机（位置环）', short: '二阶 · 机电位置伺服', category: '机电传动',
+      order: 2, doc: 'motor',
+      tex: 'J\\ddot{\\theta}+b\\dot{\\theta}=\\tau', inputSymbol: 'τ', inputUnit: 'N·m',
+      desc: '电机经减速器驱动负载的等效位置环：$J$ 为折算转动惯量，$b$ 为粘性摩擦与反电势的等效阻尼，控制量是电磁力矩 $\\tau$。对象**没有回中力矩**（$k=0$），但阻尼 $b>0$ 使纯 P 控制就能收敛——这正是它与「二阶积分器」最关键的差别。',
+      unit: 'rad', vUnit: 'rad/s', defaultTarget: 1.2, defaultInitialX: 0, defaultActuatorLimit: 12,
+      disturbanceScale: 0.05, wnScale: 1.0,
+      params: [
+        { key: 'J', label: '折算转动惯量 J', unit: 'kg·m²', min: 0.2, max: 3, step: 0.05 },
+        { key: 'b', label: '粘性阻尼 b', unit: 'N·m·s/rad', min: 0.1, max: 4, step: 0.05 }
+      ],
+      defaults: { J: 0.8, b: 1.2 },
+      effective: (p) => ({ m: p.J, c: p.b, k: 0 }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.b * s.v) / p.J,
+      holdForce: () => 0,
+      restoring: () => 0,
+      teaching: {
+        title: '入门 · 有阻尼的双积分器',
+        body: '画面是**侧视图**：定子固定，转子带着负载盘绕轴转动。方程 $J\\ddot{\\theta}+b\\dot{\\theta}=\\tau$ 与「二阶积分器」只差一个阻尼项 $b\\dot{\\theta}$，但结论完全不同：\n\n' +
+          '开环极点是 $0$ 与 $-b/J=-1.5$，都落在左半平面边界及以左，因此**纯 P 控制就能让转角停在目标**（直流增益为 1，没有静差）。切到「二阶积分器」对比：那边 $b=0$，纯 P 只会等幅振荡。\n\n' +
+          '把 $b$ 拉到 0.1 再跑 P：阻尼变小，超调与振荡时间立刻变长——这就是「机械阻尼」与「电子阻尼（D 项）」在同一个极点图上竞争的过程。'
+      }
+    },
+    tank: {
+      id: 'tank', name: '双容液位过程（线性化）', short: '二阶 · 过阻尼过程', category: '流程工业',
+      order: 2, doc: 'tank',
+      tex: '\\tau_1\\tau_2\\ddot{y}+(\\tau_1+\\tau_2)\\dot{y}+y=K u', inputSymbol: 'u', inputUnit: 'm³/h',
+      desc: '两个串联水箱的线性化模型：入口流量 $u$ 先灌第一级，再经连接管流入第二级，两级一阶惯性串联后等效为一个**过阻尼二阶对象**（$\\zeta>1$）。它的脾气与所有机械对象相反——无论怎么调都不会振荡，难点在"慢"与"纯滞后"。',
+      unit: 'm', vUnit: 'm/s', defaultTarget: 0.6, defaultInitialX: 0, defaultActuatorLimit: 10,
+      disturbanceScale: 0.04, wnScale: 0.35,
+      params: [
+        { key: 'm', label: '等效惯性 τ₁τ₂', unit: 's²', min: 0.5, max: 6, step: 0.1 },
+        { key: 'c', label: '等效阻尼 τ₁+τ₂', unit: 's', min: 1, max: 8, step: 0.1 }
+      ],
+      defaults: { m: 2.4, c: 3.2 },
+      effective: (p) => ({ m: p.m, c: p.c, k: 1 }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v - s.x) / p.m,
+      holdForce: (target) => target,
+      restoring: (s) => s.x,
+      teaching: {
+        title: '进阶 · 过阻尼过程与纯滞后',
+        body: '画面是**双水箱剖面**：左箱进液、右箱出液，两个液位通过连接管耦合。默认 $\\tau_1=2.0$、$\\tau_2=1.2$，等效 $m=2.4$、$c=3.2$、$k=1$，阻尼比 $\\zeta=c/(2\\sqrt{mk})=1.03>1$——**过阻尼，不会超调**，极点落在 $-0.50$ 与 $-0.83$。\n\n' +
+          '这说明一件事：在这个对象上"压超调"不是主要矛盾，工程上的主要矛盾是**慢**和**滞后**。把「纯滞后」调到 1.2 s，再用 PID：相位裕度被吃掉，增益一高就振荡；切到 [SmithPredict](method:SmithPredict) 或 [IMC](method:IMC)，模型里显式含有滞后/惯性，同样的增益就能稳住。'
+      }
+    },
+    pendulumDown: {
+      id: 'pendulumDown', name: '单摆（下垂稳定平衡）', short: '二阶 · 稳定平衡', category: '机械振动',
+      order: 2, doc: 'pendulumDown',
+      tex: 'J\\ddot{\\theta}+c\\dot{\\theta}+mgl\\sin\\theta=\\tau', inputSymbol: 'τ', inputUnit: 'N·m',
+      desc: '摆杆自然下垂：重力把摆拉回竖直向下，等效刚度 $k=mgl>0$，**开环稳定**。它与倒立摆共用同一套方程，只差 $k$ 的符号——一个把重力当回复力，一个把重力当倾覆力，稳定性因此完全反转。铰接阻尼很小，撤掉控制后会长时间摆动。',
+      unit: 'rad', vUnit: 'rad/s', defaultTarget: 0.3, defaultInitialX: 0, defaultActuatorLimit: 20,
+      disturbanceScale: 0.06, wnScale: 1.0,
+      params: [
+        { key: 'm', label: '摆球质量 m', unit: 'kg', min: 0.1, max: 3, step: 0.05 },
+        { key: 'l', label: '摆长 l', unit: 'm', min: 0.2, max: 2, step: 0.05 },
+        { key: 'c', label: '铰接阻尼 c', unit: 'N·m·s/rad', min: 0, max: 2, step: 0.02 }
+      ],
+      defaults: { m: 0.5, l: 0.8, c: 0.08 },
+      effective: (p) => ({ m: p.m * p.l * p.l, c: p.c, k: p.m * GRAVITY * p.l }),
+      accel: (s, u, ext, fric, p) =>
+        (u + ext + fric - p.c * s.v - p.m * GRAVITY * p.l * Math.sin(s.x)) / (p.m * p.l * p.l),
+      holdForce: (target, p) => p.m * GRAVITY * p.l * Math.sin(target),
+      restoring: (s, p) => p.m * GRAVITY * p.l * Math.sin(s.x),
+      teaching: {
+        title: '入门 · 重力是回复力还是倾覆力',
+        body: '画面与倒立摆同一套画法，但**零位朝下、支点在上**：摆杆下垂。小角度线性化后 $J=ml^2=0.32$、$k=mgl=3.92$、$c=0.08$，阻尼比只有 $0.036$——开环稳定，可是极轻阻尼，会来回摆很久。\n\n' +
+          '把目标设成 0.3 rad（约 17°），观察「稳态保持力矩」：$\\tau_h=mgl\\sin\\theta\\approx1.18$ N·m，这是重力矩，必须由控制器持续提供。再切到倒立摆：同一目标角下重力矩方向相反，而且没有任何静止平衡点——两条曲线放在一起，就是 $k$ 的符号在物理上的全部含义。'
+      }
+    },
+    satellite: {
+      id: 'satellite', name: '卫星姿态（喷气力矩）', short: '二阶 · 近无阻尼', category: '航天器控制',
+      order: 2, doc: 'satellite',
+      tex: 'J\\ddot{\\theta}+c\\dot{\\theta}=\\tau', inputSymbol: 'τ', inputUnit: 'N·m',
+      desc: '刚体卫星绕单轴姿态：太空中没有气动回中力矩，结构阻尼极小，因此几乎是**无阻尼双积分器**（极点在 $0$ 与 $-0.01$）。控制力矩来自喷气推力器或反作用轮，力矩很贵——既要限幅，也要限制开关次数（抖振直接换算成燃料）。',
+      unit: 'rad', vUnit: 'rad/s', defaultTarget: 0.2, defaultInitialX: 0, defaultActuatorLimit: 6,
+      disturbanceScale: 0.04, wnScale: 0.30,
+      params: [
+        { key: 'J', label: '转动惯量 J', unit: 'kg·m²', min: 2, max: 30, step: 0.5 },
+        { key: 'c', label: '结构阻尼 c', unit: 'N·m·s/rad', min: 0.01, max: 0.5, step: 0.01 }
+      ],
+      defaults: { J: 12, c: 0.12 },
+      effective: (p) => ({ m: p.J, c: p.c, k: 0 }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v) / p.J,
+      holdForce: () => 0,
+      restoring: () => 0,
+      teaching: {
+        title: '研究级 · 角动量、燃料与抖振',
+        body: '画面是**星体 + 太阳翼**，姿态角在圆周量角器上读。$J=12$、$c=0.12$，极点 $0$ 与 $-0.01$：**撤掉力矩，卫星会以恒定角速度一直转下去**（角动量守恒）。\n\n' +
+          '最大角加速度 $\\tau_{max}/J=0.5$ rad/s²，0.2 rad 阶跃的时间最优下界约 $2\\sqrt{\\theta/\\alpha}\\approx1.26$ s。切到 [TimeOptimal](method:TimeOptimal) 数一数开关次数，再切到 [SMC](method:SMC) 看纹波：卫星上每一次切换都是一次喷气，指标卡里的「纹波 σu」在这里可以直接读成燃料消耗。这就是为什么航天器偏爱连续、低抖振的控制器。'
+      }
+    },
+    uavAlt: {
+      id: 'uavAlt', name: '四旋翼高度通道（悬停配平）', short: '二阶 · 悬停线性化', category: '无人机',
+      order: 2, doc: 'uavAlt',
+      tex: 'm\\ddot{z}+c\\dot{z}=\\Delta T', inputSymbol: 'ΔT', inputUnit: 'N',
+      desc: '只保留高度一个自由度：控制量是**相对悬停推力的增量** $\\Delta T$，悬停配平推力 $mg$ 由对象层前馈提供。因此方程里没有重力项，等效为带阻尼的双积分器；若关掉配平前馈，重力就变成未建模的常值偏置，纯 P 控制会留下明显的高度静差。',
+      unit: 'm', vUnit: 'm/s', defaultTarget: 2.0, defaultInitialX: 0, defaultActuatorLimit: 30,
+      disturbanceScale: 0.20, wnScale: 1.0,
+      params: [
+        { key: 'm', label: '质量 m', unit: 'kg', min: 0.5, max: 4, step: 0.05 },
+        { key: 'c', label: '垂向阻尼 c', unit: 'N·s/m', min: 0.1, max: 3, step: 0.05 }
+      ],
+      defaults: { m: 1.2, c: 0.6 },
+      effective: (p) => ({ m: p.m, c: p.c, k: 0 }),
+      accel: (s, u, ext, fric, p) => (u + ext + fric - p.c * s.v) / p.m,
+      holdForce: (target, p) => p.m * GRAVITY,
+      restoring: () => 0,
+      teaching: {
+        title: '入门 · 重力前馈与高度环',
+        body: '画面是**侧视四旋翼**：地面线在下方，高度越高阴影越淡。$m=1.2$ kg 的悬停推力是 $mg=11.77$ N，这一份推力由对象层**前馈**提供，控制器只需要给出增量 $\\Delta T$。\n\n' +
+          '这样处理后对象是带阻尼的双积分器，P 控制就能无静差停住——但只要把「悬停配平」关掉，$mg$ 就变成未建模常值扰动：纯 P 会停在 $z=r-\\Delta T_{g}/K_p$ 的位置，必须靠 I 或重力前馈补回来。这正是多旋翼高度环里"油门配平"这一步的物理来源。'
+      }
+    },
   };
   /* 每个对象的可视化语义：状态符号、名称、画布坐标范围与绘图类型
      angular  true=角度量纲（目标/初始偏置滑块步长用 step/decimals）
@@ -1127,7 +1406,15 @@
     pendulum: { kind: 'pendulum', symbol: 'θ', stateName: '摆角', rateName: '角速度', rateSymbol: 'θ̇', min: -0.7, max: 0.7, ticks: [-0.5236, 0.5236], cartRange: 3, angular: true, deg: true, step: 0.05, decimals: 2 },
     aircraft: { kind: 'attitude', glyph: 'aircraft', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
     missile: { kind: 'attitude', glyph: 'missile', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
-    uav: { kind: 'attitude', glyph: 'uav', symbol: 'φ', stateName: '滚转角', rateName: '滚转角速度', rateSymbol: 'ω', min: -0.8, max: 0.8, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 }
+    uav: { kind: 'attitude', glyph: 'uav', symbol: 'φ', stateName: '滚转角', rateName: '滚转角速度', rateSymbol: 'ω', min: -0.8, max: 0.8, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
+    /* ── V5.2 新增五对象的可视化语义 ──
+       motor / pendulumDown 为角度量纲（内部 rad、显示 °）；
+       tank / uavAlt 为平动量纲（m）；satellite 复用 attitude 量角器画法。 */
+    motor: { kind: 'motor', symbol: 'θ', stateName: '转角', rateName: '角速度', rateSymbol: 'ω', min: -0.5, max: 1.8, ticks: [0, 0.523599, 1.047198, 1.570796], angular: true, deg: true, step: 0.05, decimals: 2 },
+    tank: { kind: 'tank', symbol: 'y', stateName: '液位', rateName: '液位变化率', rateSymbol: 'ẏ', min: 0, max: 1.2, ticks: [0, 0.3, 0.6, 0.9], step: 0.02, decimals: 2 },
+    pendulumDown: { kind: 'pendulumDown', symbol: 'θ', stateName: '摆角', rateName: '角速度', rateSymbol: 'θ̇', min: -0.7, max: 0.7, ticks: [0, 0.3], angular: true, deg: true, step: 0.02, decimals: 2 },
+    satellite: { kind: 'attitude', glyph: 'satellite', symbol: 'θ', stateName: '姿态角', rateName: '姿态角速度', rateSymbol: 'ω', min: -0.6, max: 0.6, ticks: [0.2], angular: true, deg: true, step: 0.02, decimals: 2 },
+    uavAlt: { kind: 'altitude', symbol: 'z', stateName: '高度', rateName: '垂向速度', rateSymbol: 'ż', min: -0.5, max: 4, ticks: [0, 1, 2, 3], step: 0.05, decimals: 2 }
   };
   /* 经典对决预设（移植自 index(14).html 的 PRESET_COMPARISONS）：
      一次性把两种流派各跑一段完整闭环，曲线叠加在同一坐标系里做公平比较。 */
@@ -1144,8 +1431,10 @@
     { id: 'ppc-vs-blf', label: 'PPC vs BLF', tag: '约束对比', a: 'PPC', b: 'BLF', desc: '预设性能漏斗与障碍李雅普诺夫函数都保证误差不越界，惩罚形式不同。' }
   ];
 
-  /* 对象显示顺序：默认对象「二阶积分器」排在首位；姿态通道对象排在最后 */
-  const PLANT_LIST = ['freeMass', 'msd', 'pendulum', 'aircraft', 'missile', 'uav'];
+  /* 对象显示顺序：默认对象「二阶积分器」排在首位；
+     机械 / 过程 / 航天 / 无人机对象按「入门 → 进阶 → 研究级」排在后面 */
+  const PLANT_LIST = ['freeMass', 'msd', 'pendulum', 'motor', 'tank', 'pendulumDown',
+    'aircraft', 'missile', 'uav', 'satellite', 'uavAlt'];
   function plantDefaults() {
     const all = {};
     PLANT_LIST.forEach((id) => { all[id] = { ...PLANTS[id].defaults }; });

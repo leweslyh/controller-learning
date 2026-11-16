@@ -2893,3 +2893,65 @@ html[data-device="mobile"] .zoom-canvas-wrap { height: 52vh; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ── V5.1 / S3：难度筛选、学习路线、指标两行布局 ── */
+.browser-levels { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 12px 8px; }
+.level-chip {
+  border: 1px solid var(--line-soft); border-radius: var(--r-pill);
+  background: var(--panel); color: var(--text-muted);
+  font-size: var(--fs-xs); padding: 3px 9px; cursor: pointer;
+}
+.level-chip.is-active { border-color: var(--green); background: var(--green-soft); color: var(--green-ink, var(--green)); font-weight: 700; }
+.level-chip:hover { border-color: var(--green); }
+
+.learn-modal { width: min(92vw, 880px); max-width: 880px; }
+.learn-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 2px 12px; }
+.learn-card {
+  border: 1.5px solid var(--frame-line); border-radius: var(--r-md);
+  background: var(--panel); padding: 12px 13px; position: relative;
+}
+.learn-card.is-done { border-color: var(--green); background: var(--green-soft); }
+.learn-card h3 { margin: 0 0 4px; font-size: 15px; }
+.learn-card .learn-no {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ink); color: var(--paper); font-size: 11px; margin-right: 6px;
+}
+.learn-card p { margin: 4px 0; font-size: var(--fs-xs); line-height: 1.65; color: var(--text-muted); }
+.learn-card .learn-tag { font-size: 10px; color: var(--text-faint); margin-right: 8px; }
+.learn-card .learn-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.learn-card .learn-check { margin-top: 6px; font-size: var(--fs-xs); color: var(--blue); }
+.learn-progress { font-size: var(--fs-xs); color: var(--text-muted); margin: 0 0 8px; }
+@media (max-width: 720px) { .learn-list { grid-template-columns: 1fr; } }
+
+/* 10 张指标卡改为 5×2：首屏全部可见，不再横向隐藏 */
+.metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); overflow-x: visible; }
+@media (max-width: 980px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.preset-expect {
+  margin: 4px 0 6px; padding: 5px 8px; border-left: 3px solid var(--green);
+  background: var(--green-soft); color: var(--green-ink, var(--green));
+  font-size: var(--fs-xs); line-height: 1.6; border-radius: 3px;
+}
+
+/* 状态徽章：调节中 / 已收敛 / 饱和 / 振荡 / 发散 */
+.quality-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+.quality-item.is-good .dot { background: var(--green); }
+.quality-item.is-warn .dot { background: var(--orange); }
+.quality-item.is-bad .dot { background: var(--red); }
+.quality-item.is-good #quality-text { color: var(--green); font-weight: 700; }
+.quality-item.is-warn #quality-text { color: var(--orange); font-weight: 700; }
+.quality-item.is-bad #quality-text { color: var(--red); font-weight: 700; }
+
+/* 欢迎引导：三格改为可点击入口 */
+.guide-step {
+  padding: 9px; text-align: left; cursor: pointer;
+  border: var(--bw-thin) solid var(--line-soft); border-radius: var(--r-panel);
+  background: var(--well); font-size: 10.5px; font-weight: 600; color: var(--muted-ink);
+}
+.guide-step:hover { border-color: var(--green); background: var(--green-soft); }
+.guide-step span { display: block; margin-bottom: 3px; font: 800 14px var(--font-mono); color: var(--green); }
+.guide-more { margin: 10px 0 0; font-size: 10.5px; color: var(--muted-ink); text-align: left; }
+
+#btn-beginner.is-active { color: var(--green); font-weight: 700; }
