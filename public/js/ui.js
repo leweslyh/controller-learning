@@ -1403,7 +1403,11 @@
       const star = ev.target.closest('[data-star]');
       if (star) { cb.toggleFavorite && cb.toggleFavorite(star.dataset.star); return; }
       const item = ev.target.closest('[data-method]');
-      if (item && cb.selectMethod) cb.selectMethod(item.dataset.method);
+      if (item && cb.selectMethod) {
+        cb.selectMethod(item.dataset.method);
+        /* 手机端：选完控制器立即收起目录抽屉，回到实验主界面 */
+        if (NS.layout && NS.layout.closeDrawer) NS.layout.closeDrawer();
+      }
     });
 
     const groups = $('param-groups');

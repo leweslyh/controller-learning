@@ -318,8 +318,8 @@ ok(html.indexOf('id="browser-search"') >= 0, '左栏搜索框存在');
 ok(uiSrc.indexOf('3 个经典被控对象') < 0 && uiSrc.indexOf('无需 KaTeX') < 0, '帮助文案无过时表述');
 ok(uiSrc.indexOf("['/', '聚焦左栏方法搜索']") >= 0, '帮助快捷键表含 /');
 const appSrc = read(path.join(jsDir, 'app.js'));
-ok(appSrc.indexOf('VERSION = D.VERSION') >= 0 && /const VERSION = '6\.3'/.test(dataSrc),
-  '版本号单一来源 6.3');
+ok(appSrc.indexOf('VERSION = D.VERSION') >= 0 && /const VERSION = '6\.4'/.test(dataSrc),
+  '版本号单一来源 6.4');
 ok(appSrc.indexOf("case '/'") >= 0, '/ 快捷键已实现');
 ok(appSrc.indexOf('150 * (plant.disturbanceScale || 1)') >= 0, '扰动 toast 随对象缩放');
 const css = read(path.join(app, 'styles.css'));
@@ -363,9 +363,15 @@ ok(chartsSrc.indexOf('pt.v * angK') >= 0 && chartsSrc.indexOf("°/s") >= 0,
 ok(css.indexOf('justify-content: safe center') >= 0, '长公式卡不再左右裁切');
 ok(chartsSrc.indexOf("view.kind !== 'tank' && view.kind !== 'altitude'") >= 0,
   '液位/高度视图不画无关水平网格');
+const layoutSrc = read(path.join(jsDir, 'layout.js'));
+ok(css.indexOf('.mobile-nav-label') >= 0 && css.indexOf('.mobile-drawer-close') >= 0,
+  '手机端常驻目录/参数与抽屉关闭按钮');
+ok(/html\[data-device="mobile"\] \.sim-canvas-wrap/.test(css) &&
+  css.indexOf('mobile-chart-hint') >= 0, '手机端画布尺寸与滑动提示');
+ok(layoutSrc.indexOf('closeDrawer: closeDrawer') >= 0, '抽屉关闭接口已暴露');
 
 /* ── 汇总 ── */
 console.log('\n════════════════════════════════');
 console.log('验收结果：' + pass + ' PASS / ' + fail + ' FAIL');
 if (fail) { console.log('存在未通过项，请修复后重跑。'); process.exit(1); }
-console.log('V6.3 静态验收全部通过。');
+console.log('V6.4 静态验收全部通过。');

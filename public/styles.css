@@ -2618,12 +2618,10 @@ html[data-layout="tablet"] .inspector-rail,
 html[data-device="tablet"] .browser-rail,
 html[data-device="tablet"] .inspector-rail { display: none !important; }
 
-/* 手机端：单列堆叠 + 设备宽度居中预览 */
+/* 手机端：单列堆叠，横屏也使用全宽 */
 html[data-layout="mobile"] .app,
 html[data-device="mobile"] .app {
-  max-width: 430px; margin: 0 auto;
-  border-left: var(--bw-thin) solid var(--line-soft);
-  border-right: var(--bw-thin) solid var(--line-soft);
+  max-width: 100%; margin: 0 auto;
 }
 html[data-layout="mobile"] .workspace,
 html[data-device="mobile"] .workspace {
@@ -2680,12 +2678,27 @@ html[data-layout="mobile"] .pad-toggle { display: none !important; }
 
 html[data-device="mobile"] .topbar-actions,
 html[data-layout="mobile"] .topbar-actions {
-  display: none; width: 100%; margin-left: 0;
+  display: flex; width: auto; margin-left: auto; gap: 4px;
+}
+/* 常驻「目录 / 参数」两个主入口；其余工具收进汉堡菜单 */
+html[data-device="mobile"] .topbar-actions > :not(.mobile-only),
+html[data-layout="mobile"] .topbar-actions > :not(.mobile-only) { display: none; }
+html[data-device="mobile"] .topbar-actions .mobile-only,
+html[data-layout="mobile"] .topbar-actions .mobile-only {
+  display: inline-flex; flex-direction: column; gap: 2px;
+  width: 46px; height: 46px; min-height: 46px; padding: 0;
+}
+.mobile-nav-label { display: none; }
+html[data-device="mobile"] .topbar-actions:not(.is-open) .mobile-nav-label,
+html[data-layout="mobile"] .topbar-actions:not(.is-open) .mobile-nav-label {
+  display: block; font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: 0;
 }
 html[data-device="mobile"] .topbar-actions.is-open,
 html[data-layout="mobile"] .topbar-actions.is-open {
   display: flex; flex-wrap: nowrap; gap: 2px; margin-left: 0; padding-top: 0;
 }
+html[data-device="mobile"] .topbar-actions.is-open > *,
+html[data-layout="mobile"] .topbar-actions.is-open > * { display: inline-flex; }
 html[data-device="mobile"] .topbar-actions.is-open .btn,
 html[data-layout="mobile"] .topbar-actions.is-open .btn {
   width: 32px; height: 32px; min-height: 32px; padding: 0;
@@ -2819,6 +2832,110 @@ html[data-device="mobile"] .track-chip,
 html[data-layout="mobile"] .track-chip,
 html[data-device="mobile"] .track-hint,
 html[data-layout="mobile"] .track-hint { flex: none; white-space: nowrap; }
+
+/* ── 手机端可读性与触控（V6.4） ───────────────────────── */
+html[data-device="mobile"] .topbar-menu-btn,
+html[data-layout="mobile"] .topbar-menu-btn {
+  width: 40px; height: 40px; min-height: 40px; margin-left: 4px;
+}
+html[data-device="mobile"] .stage-controls .btn,
+html[data-layout="mobile"] .stage-controls .btn {
+  min-height: 42px; padding: 0 12px; font-size: 12px;
+}
+html[data-device="mobile"] .stage-plant .select-input,
+html[data-layout="mobile"] .stage-plant .select-input {
+  width: 104px; height: 34px; font-size: 11px;
+}
+html[data-device="mobile"] .sim-canvas-wrap,
+html[data-layout="mobile"] .sim-canvas-wrap { height: clamp(180px, 52vw, 220px); }
+html[data-device="mobile"] .chart-card,
+html[data-layout="mobile"] .chart-card { flex: 0 0 min(340px, 88vw); }
+html[data-device="mobile"] .chart-canvas-wrap,
+html[data-layout="mobile"] .chart-canvas-wrap { height: clamp(200px, 56vw, 240px); }
+html[data-device="mobile"] .charts-head,
+html[data-layout="mobile"] .charts-head { align-items: flex-start; }
+html[data-device="mobile"] .charts-head .panel-title,
+html[data-layout="mobile"] .charts-head .panel-title {
+  white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2;
+}
+html[data-device="mobile"] .charts-head .speed-reset,
+html[data-layout="mobile"] .charts-head .speed-reset { display: none; }
+html[data-device="mobile"] .chart-card figcaption::after,
+html[data-layout="mobile"] .chart-card figcaption::after {
+  content: '⤢'; margin-left: auto; flex: none;
+  font-size: 13px; color: var(--faint-ink);
+}
+.mobile-chart-hint { display: none; }
+html[data-device="mobile"] .mobile-chart-hint,
+html[data-layout="mobile"] .mobile-chart-hint {
+  display: block; margin: 0; padding: 2px 12px 6px;
+  text-align: right; font-size: 10px; color: var(--faint-ink);
+}
+html[data-device="mobile"] .param-row .num-input,
+html[data-layout="mobile"] .param-row .num-input {
+  width: 72px; height: 36px; font-size: 13px;
+}
+html[data-device="mobile"] .param-row .select-input,
+html[data-layout="mobile"] .param-row .select-input { height: 38px; font-size: 12.5px; }
+html[data-device="mobile"] .param-row input[type="range"],
+html[data-layout="mobile"] .param-row input[type="range"] { height: 30px; }
+html[data-device="mobile"] .metrics,
+html[data-layout="mobile"] .metrics { scroll-snap-type: x proximity; }
+html[data-device="mobile"] .metric,
+html[data-layout="mobile"] .metric { scroll-snap-align: start; }
+html[data-device="mobile"] .method-item,
+html[data-layout="mobile"] .method-item { min-height: 40px; padding: 8px 10px; font-size: 12px; }
+html[data-device="mobile"] .method-item .star,
+html[data-layout="mobile"] .method-item .star { width: 32px; height: 32px; }
+html[data-device="mobile"] #browser-search,
+html[data-layout="mobile"] #browser-search { height: 40px; font-size: 13px; }
+/* 展开菜单：品牌与关闭按钮同排，工具按钮另起一整行并可换行，避免横向裁切 */
+html[data-device="mobile"] .topbar.is-menu-open .brand,
+html[data-layout="mobile"] .topbar.is-menu-open .brand { flex: 1 1 auto; }
+html[data-device="mobile"] .topbar.is-menu-open .topbar-menu-btn,
+html[data-layout="mobile"] .topbar.is-menu-open .topbar-menu-btn {
+  order: 2; margin-left: auto;
+}
+html[data-device="mobile"] .topbar.is-menu-open .topbar-actions,
+html[data-layout="mobile"] .topbar.is-menu-open .topbar-actions {
+  order: 3; flex: 1 1 100%; flex-wrap: wrap; gap: 4px;
+}
+html[data-device="mobile"] .topbar-actions.is-open .btn,
+html[data-layout="mobile"] .topbar-actions.is-open .btn {
+  flex-direction: column; gap: 2px;
+  width: 46px; height: 48px; min-height: 48px; padding: 0;
+}
+html[data-device="mobile"] .topbar-actions.is-open .mobile-nav-label,
+html[data-layout="mobile"] .topbar-actions.is-open .mobile-nav-label {
+  display: block; font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: 0;
+}
+html[data-device="mobile"] .topbar-actions.is-open .btn-ghost span,
+html[data-layout="mobile"] .topbar-actions.is-open .btn-ghost span {
+  display: block; font-size: 9px; line-height: 1; letter-spacing: 0;
+}
+html[data-device="mobile"] .topbar-actions.is-open #layout-label,
+html[data-layout="mobile"] .topbar-actions.is-open #layout-label { display: none; }
+html[data-device="mobile"] .topbar-actions.is-open .btn[data-label]::after,
+html[data-layout="mobile"] .topbar-actions.is-open .btn[data-label]::after {
+  content: attr(data-label); font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: 0;
+}
+html[data-device="mobile"] .browser.is-mobile-open .browser-foot,
+html[data-layout="mobile"] .browser.is-mobile-open .browser-foot { padding-right: 64px; }
+html[data-device="mobile"] .inspector.is-mobile-open,
+html[data-layout="mobile"] .inspector.is-mobile-open { padding-bottom: 60px; }
+/* 抽屉关闭按钮：右下角拇指可达，打开抽屉时才出现 */
+.mobile-drawer-close { display: none; }
+html[data-device="mobile"] .mobile-drawer-close,
+html[data-layout="mobile"] .mobile-drawer-close {
+  display: grid; place-items: center;
+  position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 63; width: 44px; height: 44px; padding: 0;
+  border: var(--bw-thin) solid var(--line-soft); border-radius: 50%;
+  background: var(--panel); color: var(--ink);
+  box-shadow: var(--shadow-hard);
+}
+html[data-device="mobile"] .mobile-drawer-close .icon,
+html[data-layout="mobile"] .mobile-drawer-close .icon { width: 18px; height: 18px; }
 
 .mobile-scrim {
   position: fixed; inset: 0; z-index: 61;

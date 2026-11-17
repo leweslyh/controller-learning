@@ -338,6 +338,67 @@ async function launch(chromium) {
   ok(realConsoleErrors.length === 0, '控制台无 error', realConsoleErrors.slice(0, 3).join(' | '));
   ok(failedRequests.length === 0, '无失败网络请求', failedRequests.slice(0, 3).join(' | '));
 
+  /* 8. 手机端 390×844：常驻入口、布局尺寸、抽屉开关与选后收起 */
+  const mobile = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+  });
+  const mpage = await mobile.newPage();
+  const mErrors = [];
+  mpage.on('pageerror', (err) => mErrors.push(String(err)));
+  mpage.on('console', (msg) => { if (msg.type() === 'error' && msg.text().indexOf('favicon') < 0) mErrors.push(msg.text()); });
+  await mpage.addInitScript(() => {
+    try { localStorage.setItem('ctrlsim.v4.layout', 'mobile'); } catch (err) { /* 忽略 */ }
+  });
+  await mpage.goto(base, { waitUntil: 'load' });
+  await mpage.waitForFunction(() => window.CtrlSim && window.CtrlSim.sim, null, { timeout: 15000 });
+  const mGuide = await mpage.evaluate(() => {
+    const o = document.getElementById('overlay-guide');
+    return !!o && !o.hidden;
+  });
+  if (mGuide) { await mpage.click('#btn-guide-start'); await mpage.waitForTimeout(200); }
+  const mInfo = await mpage.evaluate(() => {
+    const title = document.getElementById('charts-title');
+    return {
+      device: document.documentElement.dataset.device,
+      overflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+      simH: document.getElementById('canvas-sim').getBoundingClientRect().height,
+      chartW: document.querySelector('.chart-card').getBoundingClientRect().width,
+      titleFull: !!title && title.scrollWidth <= title.clientWidth + 1,
+      browserBtn: !!document.getElementById('btn-mobile-browser').offsetParent,
+      inspectorBtn: !!document.getElementById('btn-mobile-inspector').offsetParent
+    };
+  });
+  ok(mInfo.device === 'mobile' && mInfo.overflow, '手机端单列且无横向溢出', JSON.stringify(mInfo));
+  ok(mInfo.browserBtn && mInfo.inspectorBtn, '手机端常驻目录/参数入口', JSON.stringify(mInfo));
+  ok(mInfo.simH >= 180 && mInfo.chartW >= 320, '手机端画布与图表尺寸足够', JSON.stringify(mInfo));
+  ok(mInfo.titleFull, '手机端观测器标题完整显示', JSON.stringify(mInfo));
+
+  await mpage.click('#btn-mobile-inspector');
+  await mpage.waitForTimeout(250);
+  const inspectorOpened = await mpage.evaluate(() => document.getElementById('inspector').classList.contains('is-mobile-open'));
+  await mpage.locator('.inspector .mobile-drawer-close').click();
+  await mpage.waitForTimeout(250);
+  const inspectorClosed = await mpage.evaluate(() => !document.getElementById('inspector').classList.contains('is-mobile-open'));
+  ok(inspectorOpened && inspectorClosed, '参数抽屉可打开并由浮动按钮关闭', JSON.stringify({ inspectorOpened, inspectorClosed }));
+
+  await mpage.click('#btn-mobile-browser');
+  await mpage.waitForTimeout(250);
+  await mpage.fill('#browser-search', 'LQR');
+  await mpage.waitForTimeout(250);
+  await mpage.click('#browser-list [data-method="LQR"]');
+  await mpage.waitForTimeout(350);
+  const afterPick = await mpage.evaluate(() => ({
+    closed: !document.getElementById('browser').classList.contains('is-mobile-open'),
+    method: window.CtrlSim.sim.getSettings().method
+  }));
+  ok(afterPick.closed && afterPick.method === 'LQR', '目录选择后自动收起并切换方法', JSON.stringify(afterPick));
+  ok(mErrors.length === 0, '手机端无脚本/控制台错误', mErrors.slice(0, 3).join(' | '));
+  await mobile.close();
+
   await context.close();
   await browser.close();
   server.close();

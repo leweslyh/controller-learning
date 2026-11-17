@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="控制理论模拟器：159 种控制算法、12 类理论体系、11 个被控对象与逐法初学者教学文档的离线交互实验台。">
-<title>纸面控制实验室 · V6.3</title>
+<title>纸面控制实验室 · V6.4</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="stylesheet" href="styles.css">
@@ -78,10 +78,10 @@
 
     <div class="topbar-actions" role="group" aria-label="全局工具">
       <button type="button" id="btn-mobile-browser" class="btn btn-icon mobile-only" aria-label="控制器目录" title="控制器目录">
-        <svg class="icon" aria-hidden="true"><use href="#i-panel-left"/></svg>
+        <svg class="icon" aria-hidden="true"><use href="#i-panel-left"/></svg><span class="mobile-nav-label">目录</span>
       </button>
       <button type="button" id="btn-mobile-inspector" class="btn btn-icon mobile-only" aria-label="实验参数" title="实验参数">
-        <svg class="icon" aria-hidden="true"><use href="#i-panel-right"/></svg>
+        <svg class="icon" aria-hidden="true"><use href="#i-panel-right"/></svg><span class="mobile-nav-label">参数</span>
       </button>
       <button type="button" id="assistant-launcher" class="btn btn-ghost assistant-entry"
               aria-controls="assistant-panel" aria-expanded="false" title="智能助手（A）">
@@ -94,7 +94,7 @@
       <button type="button" id="btn-learn" class="btn btn-ghost" aria-label="打开学习路线" title="8 站学习路线（L）">
         <svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span>学习路线</span>
       </button>
-      <button type="button" id="btn-glossary" class="btn btn-icon" aria-label="符号术语词典" title="符号术语词典">
+      <button type="button" id="btn-glossary" class="btn btn-icon" aria-label="符号术语词典" title="符号术语词典" data-label="词典">
         <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
       </button>
       <span class="topbar-sep" aria-hidden="true"></span>
@@ -102,19 +102,19 @@
         <svg class="icon" aria-hidden="true"><use href="#i-filter"/></svg><span>专注</span>
       </button>
       <span class="topbar-sep" aria-hidden="true"></span>
-      <button type="button" id="btn-share" class="btn btn-icon" aria-label="复制实验参数链接" title="复制实验参数链接">
+      <button type="button" id="btn-share" class="btn btn-icon" aria-label="复制实验参数链接" title="复制实验参数链接" data-label="分享">
         <svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>
       </button>
-      <button type="button" id="btn-export" class="btn btn-icon" aria-label="导出实验数据或图片" title="导出 CSV / PNG / 公式手册">
+      <button type="button" id="btn-export" class="btn btn-icon" aria-label="导出实验数据或图片" title="导出 CSV / PNG / 公式手册" data-label="导出">
         <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
       </button>
-      <button type="button" id="btn-layout" class="btn btn-ghost layout-entry" aria-haspopup="menu" aria-expanded="false" title="布局：自动适配">
+      <button type="button" id="btn-layout" class="btn btn-ghost layout-entry" aria-haspopup="menu" aria-expanded="false" title="布局：自动适配" data-label="布局">
         <svg class="icon" aria-hidden="true"><use id="layout-icon-use" href="#i-monitor"/></svg><span id="layout-label">自动</span>
       </button>
-      <button type="button" id="btn-theme" class="btn btn-icon" aria-label="切换深浅主题" title="切换深浅主题">
+      <button type="button" id="btn-theme" class="btn btn-icon" aria-label="切换深浅主题" title="切换深浅主题" data-label="主题">
         <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
       </button>
-      <button type="button" id="btn-help" class="btn btn-icon" aria-label="帮助与快捷键" title="帮助与快捷键（?）">
+      <button type="button" id="btn-help" class="btn btn-icon" aria-label="帮助与快捷键" title="帮助与快捷键（?）" data-label="帮助">
         <svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>
       </button>
     </div>
@@ -127,6 +127,9 @@
   <div class="workspace" id="workspace">
     <!-- 左：控制器浏览器（默认贴边挂起，首次进入展开） -->
     <aside class="browser panel" id="browser" aria-label="控制器浏览器">
+      <button type="button" class="mobile-drawer-close" data-drawer-close aria-label="关闭控制器目录" title="关闭">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
       <div class="browser-rail" id="browser-rail">
         <button type="button" id="btn-browser-expand" class="rail-btn" aria-label="展开控制器目录" title="展开控制器目录">
           <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
@@ -284,6 +287,7 @@
           </figure>
         </div>
 
+        <p class="mobile-chart-hint">左右滑动查看曲线 · 点击卡片放大</p>
         <div class="legend" id="legend" aria-label="曲线图例"></div>
         <div class="track-strip" id="track-strip" aria-label="实验轨迹"></div>
       </section>
@@ -292,6 +296,9 @@
 
     <!-- 右：档案与参数（参考实验室的参数小卡） -->
     <aside class="inspector panel" id="inspector" aria-label="控制器档案与实验参数">
+      <button type="button" class="mobile-drawer-close" data-drawer-close aria-label="关闭实验参数" title="关闭">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
       <div class="inspector-rail" id="inspector-rail">
         <button type="button" id="btn-inspector-expand" class="rail-btn" aria-label="展开实验参数" title="展开实验参数">
           <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
@@ -340,7 +347,7 @@
     <span class="status-sep" aria-hidden="true"></span>
     <span class="status-item">邮箱 <a class="dev-mail" href="mailto:759528706@qq.com">759528706@qq.com</a></span>
     <span class="status-sep" aria-hidden="true"></span>
-    <span class="status-item">版本 V6.3 · 正式版</span>
+    <span class="status-item">版本 V6.4 · 正式版</span>
   </footer>
 </div>
 
@@ -609,7 +616,7 @@
     <span class="assistant-avatar" aria-hidden="true"><svg class="icon"><use href="#i-bot"/></svg></span>
     <div class="assistant-id">
       <strong id="assistant-title">控制助教</strong>
-      <small>DeepSeek · V6.3 知识库</small>
+      <small>DeepSeek · V6.4 知识库</small>
     </div>
     <span class="assistant-status is-idle" id="assistant-status" role="status">
       <span class="assistant-dot"></span><span id="assistant-status-text">未连接</span>

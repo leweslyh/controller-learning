@@ -10,7 +10,7 @@
         const DT = 0.02; 
         const INITIAL_PARAMS = { m: 2.0, k: 1.0, c: 0.5, target: 5.0 };
         /* 版本单一来源：前端标题、分享链接、导出件与后端健康检查都由这里取值 */
-        const VERSION = '6.3';
+        const VERSION = '6.4';
         /* 会输出辅助参考流形（alg.ref_display）的方法清单：ui 图例与 charts 量程/绘制共用，
            必须与 simulation.js 中写 ref_display 的分支一一对应（verify-v5.js 校验） */
         const REF_FLOW_METHODS = [

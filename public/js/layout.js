@@ -108,7 +108,13 @@
     if (!el.actions) return;
     const open = el.actions.classList.toggle('is-open');
     if (el.topbar) el.topbar.classList.toggle('is-menu-open', open);
-    if (el.menuBtn) el.menuBtn.setAttribute('aria-expanded', String(open));
+    if (el.menuBtn) {
+      el.menuBtn.setAttribute('aria-expanded', String(open));
+      el.menuBtn.setAttribute('aria-label', open ? '收起菜单' : '展开菜单');
+      el.menuBtn.title = open ? '收起菜单' : '展开菜单';
+      const use = el.menuBtn.querySelector('use');
+      if (use) use.setAttribute('href', open ? '#i-close' : '#i-menu');
+    }
   }
   function closeDrawer() {
     ['browser', 'inspector'].forEach((id) => {
@@ -178,6 +184,9 @@
       el.mobileInspector.addEventListener('click', () => openDrawer('inspector'));
     }
     if (el.scrim) el.scrim.addEventListener('click', closeDrawer);
+    doc.querySelectorAll('[data-drawer-close]').forEach((btn) => {
+      btn.addEventListener('click', closeDrawer);
+    });
     ['btn-browser-collapse', 'btn-inspector-collapse'].forEach((id) => {
       const btn = doc.getElementById(id);
       if (btn) btn.addEventListener('click', closeDrawer);
@@ -238,7 +247,8 @@
     get: function () { return pref; },
     current: function () { return activeDevice(); },
     detect: detect,
-    apply: apply
+    apply: apply,
+    closeDrawer: closeDrawer
   };
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', init, { once: true });
