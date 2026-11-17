@@ -29,7 +29,7 @@ const sandbox = {
 sandbox.window = sandbox;
 sandbox.global = sandbox;
 vm.createContext(sandbox);
-['data.js', 'docs.js'].forEach((f) => {
+['core.js', 'data.js', 'docs.js'].forEach((f) => {
   vm.runInContext(fs.readFileSync(path.join(app, 'js', f), 'utf8'), sandbox, { filename: f });
 });
 const NS = sandbox.CtrlSim;

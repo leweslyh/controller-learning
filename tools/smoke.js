@@ -3,12 +3,14 @@
    tools/smoke.js — 浏览器冒烟测试（S0-3 入库）
    运行：npm run smoke          （或 node tools/smoke.js）
    依赖：playwright-core（开发期依赖）+ 本机已安装的 Chrome / Edge
-   覆盖五条门禁：
+   覆盖七组门禁：
      1. 首屏加载：标题、159 法、11 对象，无 console error / pageerror
      2. 启动后仿真时间 t 递增
      3. 切换被控对象时界面联动（下拉框 / 指标标签 / 状态量符号）
      4. 教学文档可打开，且「五、稳定性证明」「十、稳定性速查」「十一、可判定练习」三章存在
      5. 指标区在 1280×900 视口下不横向溢出
+     6. V6.1 修复项回归：A/B、重录指标、对象限幅、粒子滤波、分享还原、收藏筛选、Esc 关闭
+     7. 运行期无未捕获异常 / console error / 失败请求
    说明：脚本自带零依赖静态服务器（Node 内置 http），不读取任何构建产物；
          页面本身仍是 file:// 可运行的单页应用。
    ============================================================ */
@@ -230,7 +232,107 @@ async function launch(chromium) {
   ok(metrics.scroll <= metrics.client + 1, '指标区无横向溢出',
     'scroll=' + metrics.scroll + ' client=' + metrics.client);
 
-  /* 6. 运行期无报错 */
+  /* 6. V6.1 修复项回归（直接走内核 API，避免依赖视觉细节） */
+  const regress = await page.evaluate(() => {
+    const sim = window.CtrlSim.sim;
+    const app = window.CtrlSim.app;
+    const D = window.CtrlSim.data;
+    const out = {};
+
+    /* 6a. A/B 对比下切换方法：旧轨迹指标不得被清零、方法名不得被改写 */
+    sim.setCompareMode(false);
+    sim.setPlant('freeMass');
+    sim.setMethod('PID');
+    sim.setCompareMode(true);
+    for (let i = 0; i < 120; i++) sim.stepOnce();
+    const firstBefore = sim.getTracks()[0];
+    out.ab = { beforeTicks: firstBefore ? firstBefore.ticks : 0 };
+    sim.setMethod('PD');
+    const firstAfter = sim.getTracks()[0];
+    out.ab.rmse = firstAfter ? firstAfter.rmse : 0;
+    out.ab.method = firstAfter ? firstAfter.method : '';
+    sim.setCompareMode(false);
+    sim.resetSim('PID', sim.getSettings().physParams.target, sim.getSettings().initialX);
+
+    /* 6b. 重录必须清空全部指标（累计量、超调、调节时间、抖振统计） */
+    sim.setPlant('msd');
+    sim.setMethod('PID');
+    sim.triggerDisturbance();
+    for (let i = 0; i < 240; i++) sim.stepOnce();
+    sim.rerecord();
+    const m = sim.getMetrics();
+    out.record = { overshoot: m.overshoot, settle: m.settle, rmse: m.rmse };
+
+    /* 6c. 无人机预设 / 全量重置的执行器限幅应回到对象默认 20 N·m */
+    const preset = (D.PRESETS || []).find((p) => p.plant === 'uav');
+    if (preset) sim.applyPreset(preset);
+    out.presetLimit = sim.getSettings().actuatorLimit;
+    sim.setPlant('uav');
+    sim.resetParams();
+    out.resetLimit = sim.getSettings().actuatorLimit;
+
+    /* 6d. 粒子滤波 p_num=50 不得因数组越界产生 NaN */
+    sim.setPlant('msd');
+    sim.setMethod('Particle-Filter');
+    sim.setParam('p_num', 50, 'ctrl');
+    for (let i = 0; i < 120; i++) sim.stepOnce();
+    const pfState = sim.getState();
+    out.pf = { x: pfState.x, xFinite: Number.isFinite(pfState.x), uFinite: Number.isFinite(sim.getMetrics().u) };
+
+    /* 6e. 分享链接保留倒立摆辅助/串级设置，并经受 setParam 的范围校验 */
+    sim.setPlant('pendulum');
+    sim.setParam('balanceAssist', 'off');
+    sim.setParam('cartLoop', 'on');
+    sim.setParam('cartKp', 0.5);
+    const hash = app.buildHash();
+    const hasKeys = hash.indexOf('balanceAssist') >= 0 && hash.indexOf('cartLoop') >= 0;
+    sim.setPlant('freeMass');
+    window.history.replaceState(null, '', hash);
+    const restored = app.restoreFromHash();
+    const st = sim.getSettings();
+    out.share = {
+      hasKeys: hasKeys, restored: restored, plant: st.plantId,
+      assist: st.balanceAssist, loop: st.cartLoop, kp: st.cartKp
+    };
+    window.history.replaceState(null, '', window.location.pathname);
+    return out;
+  });
+  ok(regress.ab.beforeTicks > 0 && regress.ab.rmse > 0 && regress.ab.method === 'PID',
+    'A/B 切换保留旧轨迹指标与方法名', JSON.stringify(regress.ab));
+  ok(regress.record.overshoot === 0 && regress.record.settle === undefined && regress.record.rmse === 0,
+    '重录清空超调/调节时间/RMSE', JSON.stringify(regress.record));
+  ok(regress.presetLimit === 20 && regress.resetLimit === 20,
+    'uav 预设与重置的执行器限幅 = 20', JSON.stringify({ preset: regress.presetLimit, reset: regress.resetLimit }));
+  ok(regress.pf.xFinite && regress.pf.uFinite && Math.abs(regress.pf.x) < 1e6,
+    '粒子滤波 50 粒子不产生 NaN', JSON.stringify(regress.pf));
+  ok(regress.share.hasKeys && regress.share.restored && regress.share.assist === 'off' &&
+    regress.share.loop === 'on' && Math.abs(regress.share.kp - 0.5) < 1e-6,
+    '分享链接还原倒立摆辅助/串级设置', JSON.stringify(regress.share));
+
+  /* 6f. 收藏筛选后切换标签页必须恢复全量列表 */
+  await page.click('#btn-star-filter');
+  await page.waitForTimeout(120);
+  await page.click('.browser-tabs .tab[data-scope="all"]');
+  await page.waitForTimeout(120);
+  const visible = await page.evaluate(() => document.querySelectorAll('#browser-list [data-method]').length);
+  ok(visible === 159, '收藏筛选后切标签恢复 159 法', 'visible=' + visible);
+
+  /* 6g. 学习路线浮层可用 Esc 关闭 */
+  await page.keyboard.press('l');
+  await page.waitForTimeout(200);
+  const learnOpen = await page.evaluate(() => {
+    const o = document.getElementById('overlay-learn');
+    return !!o && !o.hidden;
+  });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  const learnClosed = await page.evaluate(() => {
+    const o = document.getElementById('overlay-learn');
+    return !!o && o.hidden;
+  });
+  ok(learnOpen && learnClosed, '学习路线浮层可被 Esc 关闭', JSON.stringify({ learnOpen, learnClosed }));
+
+  /* 7. 运行期无报错 */
   const realConsoleErrors = consoleErrors.filter((t) => t.indexOf('favicon') < 0);
   ok(pageErrors.length === 0, '无未捕获脚本异常', pageErrors.slice(0, 3).join(' | '));
   ok(realConsoleErrors.length === 0, '控制台无 error', realConsoleErrors.slice(0, 3).join(' | '));

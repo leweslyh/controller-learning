@@ -9,14 +9,12 @@
   const sim = NS.sim;
   const D = NS.data;
   const doc = global.document;
+  const U = NS.utils;
 
-  /* V2.1:1153 的参考流形白名单原样保留 */
-  const REF_FLOW_METHODS = [
-    'MRAC', 'L1', 'Flatness', 'InputShaping', 'PPC', 'PTC', 'ESO-Follow',
-    'MRAC-MIT', 'Topological', 'Posicast', 'Funnel', 'TimeVary-BLF', 'Lorenz-Coupled'
-  ];
+  /* 参考流形白名单：与 ui 图例、simulation 的 ref_display 分支共用 data.js 单一来源 */
+  const REF_FLOW_METHODS = D.REF_FLOW_METHODS;
 
-  const PAD = { l: 50, r: 12, t: 18, b: 28 };
+  const PAD = { l: 48, r: 14, t: 22, b: 40 };
   const IDS = { sim: 'canvas-sim', pos: 'canvas-pos', phase: 'canvas-phase', ctrl: 'canvas-ctrl', cart: 'canvas-cart', vel: 'canvas-vel' };
   let els = null;
   let palette = null;
@@ -79,8 +77,8 @@
     return { ctx, w, h };
   }
 
-  function fmt(v, d) { return Number.isFinite(v) ? v.toFixed(d === undefined ? 2 : d) : '—'; }
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  const fmt = U.fmt;
+  const clamp = U.clamp;
 
   /* ── 自适应坐标：1/2/5 × 10ⁿ 的「整数刻度」 ────────── */
   function niceStep(raw) {
@@ -94,8 +92,15 @@
   function niceRange(min, max, padRatio, maxTicks) {
     if (!Number.isFinite(min) || !Number.isFinite(max)) { min = -1; max = 1; }
     if (max - min < 1e-9) { const c = (min + max) / 2; min = c - 1; max = c + 1; }
-    const pad = Math.max((max - min) * (padRatio === undefined ? 0.1 : padRatio), 1e-6);
+    const span0 = max - min;
+    const pad = Math.max(span0 * (padRatio === undefined ? 0.05 : padRatio), 1e-6);
     let lo = min - pad, hi = max + pad;
+    /* 非负数据（位置/液位/高度）不要把下界 padded 到负数：
+       否则原点被推到绘图区内部，左下角出现大片无意义空白。
+       仅当最小值确实贴近 0（不超过跨度 25%）时才贴零，避免把 0.4~0.8 这类
+       小范围数据强行拉到 0 而压扁曲线。 */
+    if (min >= 0 && min <= span0 * 0.25) lo = 0;
+    if (max <= 0 && -max <= span0 * 0.25) hi = 0;
     const step = niceStep((hi - lo) / (maxTicks || 5));
     lo = Math.floor(lo / step) * step;
     hi = Math.ceil(hi / step) * step;
@@ -105,11 +110,22 @@
     }
     return { min: lo, max: hi, ticks, step };
   }
-  function tickLabel(v) {
+  function tickLabel(v, dec) {
     const a = Math.abs(v);
-    if (a >= 10000 || (a > 0 && a < 0.01)) return v.toExponential(1);
+    if (a >= 10000 || (a > 0 && a < 0.001)) return v.toExponential(1);
+    if (dec !== undefined) return v.toFixed(dec);
     if (Number.isInteger(v)) return String(v);
     return v.toFixed(a < 1 ? 2 : 1);
+  }
+  /* 由刻度步长反推需要的小数位：0.5→1、0.25→2、2→0，保证同一轴的小数位一致 */
+  function stepDecimals(step) {
+    const s = Math.abs(step || 1);
+    if (!Number.isFinite(s) || s <= 0) return 0;
+    for (let d = 0; d <= 4; d++) {
+      const scaled = s * Math.pow(10, d);
+      if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return d;
+    }
+    return 4;
   }
 
   /* 绘制坐标轴并返回映射函数与绘图区 */
@@ -133,36 +149,32 @@
 
     ctx.fillStyle = p.muted;
     ctx.font = '10px ui-monospace, monospace';
+    const xDec = stepDecimals(cfg.x.step);
+    const yDec = stepDecimals(cfg.y.step);
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     cfg.y.ticks.forEach((v) => {
       const y = mapY(v);
-      if (y >= plot.y0 - 2 && y <= plot.y1 + 2) ctx.fillText(tickLabel(v), plot.x0 - 6, y);
+      if (y >= plot.y0 - 2 && y <= plot.y1 + 2) ctx.fillText(tickLabel(v, yDec), plot.x0 - 6, y);
     });
-    /* 轴标题（放在绘图区边缘内侧，避免与刻度数字重叠） */
-    ctx.fillStyle = p.muted; ctx.font = '600 10px ui-monospace, monospace';
-    const xTitleW = ctx.measureText(cfg.xLabel).width;
-    ctx.font = '10px ui-monospace, monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    /* x 刻度只画数值；单位统一写在轴标题的括号里。
+       稠密时按与前一个标签的间距跳过，避免刻度数字互相叠压。 */
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    let lastRight = -Infinity;
     cfg.x.ticks.forEach((v) => {
       const x = mapX(v);
       if (x < plot.x0 - 2 || x > plot.x1 + 2) return;
-      const txt = tickLabel(v) + (cfg.xUnit || '');
+      const txt = tickLabel(v, xDec);
       const tw = ctx.measureText(txt).width;
-      /* 右下角留给轴标题：与之相撞的刻度数字整体左移，避免叠字 */
-      const limit = plot.x1 - xTitleW - 8;
-      if (x + tw / 2 > limit) {
-        ctx.textAlign = 'right';
-        ctx.fillText(txt, Math.max(plot.x0 + tw / 2, limit), h - 8);
-        ctx.textAlign = 'center';
-      } else {
-        ctx.fillText(txt, x, h - 8);
-      }
+      if (x - tw / 2 < lastRight + 6) return;
+      ctx.fillText(txt, x, plot.y1 + 10);
+      lastRight = x + tw / 2;
     });
+    /* 轴标题：y 轴在绘图区上方，x 轴在右下角；与刻度数字分两行，不再抢位 */
     ctx.fillStyle = p.muted; ctx.font = '600 10px ui-monospace, monospace';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText(cfg.yLabel, plot.x0 + 4, 3);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(cfg.yLabel, plot.x0, plot.y0 - 6);
     ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillText(cfg.xLabel, plot.x1, h - 8);
+    ctx.fillText(cfg.xLabel, plot.x1, h - 6);
     ctx.restore();
     return { mapX, mapY, plot };
   }
@@ -216,7 +228,11 @@
     ctx.save();
     ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.beginPath();
     for (let i = 0; i <= 10; i++) { const x = i / 10 * w; ctx.moveTo(x, 0); ctx.lineTo(x, groundY); }
-    for (let i = 0; i <= 4; i++) { const y = i / 4 * groundY; ctx.moveTo(0, y); ctx.lineTo(w, y); }
+    /* 液位/高度视图自带按量纲绘制的刻度；通用水平网格与这些刻度不对应，
+       会误导读数，故只保留竖直纹理线。 */
+    if (view.kind !== 'tank' && view.kind !== 'altitude') {
+      for (let i = 0; i <= 4; i++) { const y = i / 4 * groundY; ctx.moveTo(0, y); ctx.lineTo(w, y); }
+    }
     ctx.stroke();
     ctx.strokeStyle = p.border; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(w, groundY); ctx.stroke();
@@ -224,7 +240,8 @@
     /* 倒立摆的地面刻度由 paintPendulum 按镜头滚动的米制标尺绘制；
        姿态通道的刻度画在圆周上（paintAttitude），这里都跳过静态地面刻度 */
     if (view.kind !== 'pendulum' && view.kind !== 'attitude' &&
-      view.kind !== 'motor' && view.kind !== 'pendulumDown' && view.kind !== 'altitude') {
+      view.kind !== 'motor' && view.kind !== 'pendulumDown' && view.kind !== 'altitude' &&
+      view.kind !== 'tank') {
       view.ticks.forEach((t) => {
         const x = mapX(t);
         if (x >= 0 && x <= w) { ctx.fillRect(x, groundY, 1.5, 5); ctx.fillText(String(t), x, groundY + 17); }
@@ -241,12 +258,18 @@
   }
   function drawSimReadout(b) {
     const { ctx, state, plant, p } = b;
-    /* 画布不再显示对象名（面板下拉框已可见）；仅保留倒立摆小车平动量
-       x_c / v_c（不在下方指标卡内，非重复）。 */
+    /* 画布不显示对象名；保留倒立摆小车平动量 x_c / v_c，以及关节力矩/电机读数 */
     if (plant.id === 'pendulum') {
       const cs = sim.getSettings();
       const refTxt = cs.cartLoop === 'on' ? '    x_ref = ' + fmt(cs.cartTarget || 0, 2) + ' m' : '';
-      label(ctx, 'x_c = ' + fmt(state.xc || 0, 2) + ' m    v_c = ' + fmt(state.vc || 0, 2) + ' m/s' + refTxt, 10, 16, p.muted);
+      label(ctx, 'x_c = ' + fmt(state.xc || 0, 2) + ' m    v_c = ' + fmt(state.vc || 0, 2) + ' m/s' + refTxt,
+        10, 16, p.muted);
+    } else if (plant.id === 'pendulumDown') {
+      label(ctx, 'θ = ' + fmt((state.x || 0) * 180 / Math.PI, 1) + '°    τ = '
+        + fmt(b.u || 0, 2) + ' N·m', 10, 16, p.muted);
+    } else if (plant.id === 'motor') {
+      label(ctx, 'θ = ' + fmt((state.x || 0) * 180 / Math.PI, 1) + '°    τ = '
+        + fmt(b.u || 0, 2) + ' N·m', 10, 16, p.muted);
     }
   }
   function movingColor(b) { return b.impulse > 10 ? b.p.u : b.p.x; }
@@ -319,6 +342,38 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(text, lx, y - 9 - ph / 2 + 0.5);
     ctx.restore();
+  }
+
+  /* 控制输入弧形箭头（单摆/电机共用）：
+     起点固定在运动部件（摆杆、转子）当前的画布角度上，随部件一起转动；
+     弧长随 |u| 增长，箭头沿切向收尾；返回末端/中点供数值胶囊定位。 */
+  function controlArc(ctx, p, cx, cy, radius, startAngle, u, uRef, opts) {
+    const o = opts || {};
+    const dir = u >= 0 ? 1 : -1;
+    const minSpan = o.minSpan === undefined ? 0.20 : o.minSpan;
+    const maxSpan = o.maxSpan === undefined ? 0.55 : o.maxSpan;
+    const span = minSpan + maxSpan * Math.sqrt(clamp(Math.abs(u) / (uRef || 20), 0, 1));
+    const aEnd = startAngle + dir * span;
+    const active = Math.abs(u) > 0.5;
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.globalAlpha = active ? 1 : 0.5;
+    ctx.lineWidth = o.width || 2.6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, Math.min(startAngle, aEnd), Math.max(startAngle, aEnd), false);
+    ctx.stroke();
+    ctx.fillStyle = p.accent; ctx.globalAlpha = 1;
+    const tipX = cx + Math.cos(aEnd) * radius;
+    const tipY = cy + Math.sin(aEnd) * radius;
+    arcHead(ctx, tipX, tipY, cx, cy, dir > 0 ? 1 : -1, o.head || 7);
+    ctx.restore();
+    const aMid = (startAngle + aEnd) / 2;
+    const gap = radius + (o.labelGap === undefined ? 16 : o.labelGap);
+    return {
+      aEnd: aEnd, aMid: aMid, dir: dir, active: active,
+      tipX: tipX, tipY: tipY,
+      midX: cx + Math.cos(aMid) * gap,
+      midY: cy + Math.sin(aMid) * gap
+    };
   }
 
   function paintSpring(b, nonlinear) {
@@ -558,16 +613,16 @@
       const a0 = theta >= 0 ? -Math.PI / 2 : aTip;
       const a1 = theta >= 0 ? aTip : -Math.PI / 2;
       ctx.save();
-      ctx.strokeStyle = p.accent; ctx.lineWidth = 2;
+      ctx.strokeStyle = p.muted; ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(cartX, pivotY, arcR, a0, a1, false);
       ctx.stroke();
       ctx.restore();
       const txE = -dS * Math.sin(aTip), tyE = dS * Math.cos(aTip);
       const axE = cartX + Math.cos(aTip) * arcR, ayE = pivotY + Math.sin(aTip) * arcR;
-      arrow(ctx, axE - txE * 9, ayE - tyE * 9, axE + txE * 4, ayE + tyE * 4, p.accent, 1.6);
+      arrow(ctx, axE - txE * 9, ayE - tyE * 9, axE + txE * 4, ayE + tyE * 4, p.muted, 1.6);
       /* θ 符号与箭头同一高度：紧挨箭头外侧水平排列 */
-      label(ctx, 'θ', axE + dS * 16, ayE + 4, p.accent, 'center',
+      label(ctx, 'θ', axE + dS * 16, ayE + 4, p.muted, 'center',
         'bold 11px ui-monospace, monospace');
     }
 
@@ -599,7 +654,8 @@
     ctx.beginPath(); ctx.arc(cartX, pivotY, 4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    /* 控制力：作用在小车上的水平推力 F（N），与其他对象同一支美化箭头 */
+    /* 控制输入：水平推力 F 作用在小车上（与二阶积分器的小车一致），
+       不是摆杆上的关节力矩；推力通过小车加速度间接扶正摆杆。 */
     forceArrow(b, cartX, pivotY + cartH / 2, cartW / 2, { uRef: 12, max: 58 });
 
     if (cartLoop !== 'on' && Math.abs(target) > 0.01) {
@@ -657,14 +713,14 @@
       const a0 = Math.PI / 2, a1 = Math.PI / 2 - theta;
       const arcR = Math.min(L * 0.46, 58);
       ctx.save();
-      ctx.strokeStyle = p.accent; ctx.lineWidth = 2;
+      ctx.strokeStyle = p.muted; ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(cx, pivotY, arcR, Math.min(a0, a1), Math.max(a0, a1), false);
       ctx.stroke();
       ctx.restore();
       const mid = (a0 + a1) / 2;
       label(ctx, 'θ', cx + Math.cos(mid) * (arcR + 12), pivotY + Math.sin(mid) * (arcR + 12) + 4,
-        p.accent, 'center', 'bold 11px ui-monospace, monospace');
+        p.muted, 'center', 'bold 11px ui-monospace, monospace');
     }
 
     /* 摆杆与摆球 */
@@ -687,28 +743,13 @@
     ctx.fillStyle = p.text; ctx.beginPath(); ctx.arc(cx, pivotY, 2.2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    /* 关节力矩：绕支点的小半径弧形箭头 + 数值标签。
-       旧实现半径取摆长的 34%，在长摆上会画成大圆弧、看不出"力矩"语义；
-       现固定为紧凑圆弧，箭头用 arcHead 沿切向收尾。 */
+    /* 关节力矩：绕支点的弧形箭头，起点落在当前摆杆上并随摆杆转动；
+       弧长随 |τ| 增长，箭头沿切向收尾，数值显示在画布左上角读数行。 */
     const u = b.u || 0;
-    const dir = u >= 0 ? 1 : -1;
-    const spanA = 0.18 + 0.50 * Math.sqrt(clamp(Math.abs(u) / 20, 0, 1));
-    const torqueR = Math.min(30, Math.max(18, L * 0.24));
-    const aStart = Math.PI / 2;
-    const aEnd = aStart + dir * spanA;
-    ctx.save();
-    ctx.strokeStyle = p.accent; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
-    ctx.globalAlpha = Math.abs(u) > 0.5 ? 1 : 0.5;
-    ctx.beginPath();
-    ctx.arc(cx, pivotY, torqueR, Math.min(aStart, aEnd), Math.max(aStart, aEnd), false);
-    ctx.stroke();
-    ctx.fillStyle = p.accent;
-    const tipX = cx + Math.cos(aEnd) * torqueR, tipY = pivotY + Math.sin(aEnd) * torqueR;
-    arcHead(ctx, tipX, tipY, cx, pivotY, dir > 0 ? 1 : -1, 6);
-    ctx.restore();
-    const text = 'τ=' + fmt(u, 2) + ' N·m';
-    label(ctx, text, cx + torqueR + 14, pivotY + (dir > 0 ? 32 : 10), p.accent, 'left',
-      'bold 9px ui-monospace, monospace');
+    const torqueR = Math.min(90, Math.max(34, L * 0.62));
+    const rodAng = Math.atan2(ballY - pivotY, ballX - cx);
+    controlArc(ctx, p, cx, pivotY, torqueR, rodAng, u, 8,
+      { minSpan: 0.35, maxSpan: 0.85, width: 2.6, head: 6 });
   }
 
   /* ── 直流伺服电机（V5.2 新增）────────────────────────────────────
@@ -716,7 +757,8 @@
   function paintMotor(b) {
     const { ctx, w, h, state, target, view, p } = b;
     const cx = w / 2, cy = h / 2;
-    const R = Math.min(w * 0.36, h * 0.36);
+    /* 留出底部转角/力矩读数与顶部量角器的空间；0.30h 保证 90° 刻度不被裁切 */
+    const R = Math.min(w * 0.34, h * 0.30);
     const theta = state.x || 0;
     const tTheta = target || 0;
     const accent = movingColor(b);
@@ -794,11 +836,14 @@
     ctx.fillStyle = p.border; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    /* 转角读数与力矩胶囊 */
-    label(ctx, 'θ = ' + fmt(theta * 180 / Math.PI, 1) + '°', cx, cy + R * 1.62, p.text,
-      'center', 'bold 11px ui-monospace, monospace');
-    const text = 'τ=' + fmt(u, 2) + ' N·m';
-    label(ctx, text, cx + R * 0.72, cy - R * 0.86, p.accent, 'left', 'bold 9px ui-monospace, monospace');
+    /* 模型说明放左下角，避开顶部量角器刻度；数值读数统一在左上角 */
+    label(ctx, 'J·θ̈ + b·θ̇ = τ', 10, h - 10, p.muted, 'left',
+      '9px ui-monospace, monospace');
+    /* 定子固定、转子+负载盘随 τ 转动；力矩弧起点落在转子指针上 */
+    label(ctx, '定子（固定）', cx - R * 0.92, cy - R * 1.08, p.muted, 'left',
+      '9px ui-monospace, monospace');
+    controlArc(ctx, p, cx, cy, R * 0.80, -theta, u, 12,
+      { minSpan: 0.18, maxSpan: 0.50, width: 2.4, head: 6 });
   }
 
   /* ── 双容液位过程（V5.2 新增）────────────────────────────────────
@@ -827,7 +872,7 @@
     });
     ctx.restore();
 
-    const drawTank = (x, levelRatio, color) => {
+    const drawTank = (x, levelRatio, color, name) => {
       const level = clamp(levelRatio, 0, 1);
       ctx.save();
       /* 箱体 */
@@ -849,15 +894,21 @@
       ctx.moveTo(x + tankW, topY); ctx.lineTo(x + tankW, groundY);
       ctx.moveTo(x, groundY); ctx.lineTo(x + tankW, groundY);
       ctx.stroke();
-      /* 开口标注 */
+      /* 箱名（数值由右侧液位标尺与目标虚线给出，避免顶部叠字） */
       ctx.fillStyle = p.muted; ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'center';
-      ctx.fillText(level.toFixed(2) + ' m', x + tankW / 2, topY - 6);
+      ctx.fillText(name, x + tankW / 2, topY - 8);
       ctx.restore();
     };
     /* 左箱液位：由入口流量与右箱液位共同决定（教学示意，非独立状态） */
     const leftLevel = clamp(0.45 * (y / 1.2) + 0.35 * clamp(Math.abs(u) / 10, 0, 1), 0, 1);
-    drawTank(x1, leftLevel, accent);
-    drawTank(x2, y / 1.2, accent);
+    drawTank(x1, leftLevel, accent, '箱 1 · 缓冲');
+    drawTank(x2, y / 1.2, accent, '箱 2 · 被控液位 y');
+
+    /* 模型说明：两箱一阶惯性串联 → 过阻尼二阶；u 为入口流量 */
+    label(ctx, 'τ₁τ₂·ÿ + (τ₁+τ₂)·ẏ + y = K·u', 10, 16, p.muted, 'left',
+      '9px ui-monospace, monospace');
+    label(ctx, 'u 进水 → 箱 1 → 连接管 → 箱 2 → y 液位', 10, 30, p.muted, 'left',
+      '9px ui-monospace, monospace');
 
     /* 连接管：左箱底部 → 右箱中部，带流向箭头 */
     const pipeY = groundY - tankH * 0.18;
@@ -869,6 +920,8 @@
     ctx.stroke();
     arrow(ctx, x1 + tankW + 12, pipeY, x2 - 6, pipeY, p.muted, 1.4);
     ctx.restore();
+    label(ctx, 'Q₁₂', (x1 + tankW + x2) / 2, pipeY - 8, p.muted, 'center',
+      '9px ui-monospace, monospace');
 
     /* 入口阀：左上方的进流箭头，长度随 |u| */
     const valveLen = 14 + 34 * clamp(Math.abs(u) / 10, 0, 1);
@@ -883,7 +936,7 @@
     ctx.setLineDash([6, 4]); ctx.strokeStyle = p.r; ctx.lineWidth = 1.8;
     ctx.beginPath(); ctx.moveTo(x2 - 10, ty); ctx.lineTo(x2 + tankW + 10, ty); ctx.stroke();
     ctx.restore();
-    label(ctx, 'r = ' + fmt(tY, 2) + ' m', x2 + tankW / 2, ty - 6, p.r, 'center',
+    label(ctx, 'r = ' + fmt(tY, 2) + ' m', x2 + tankW / 2, ty < topY + 26 ? ty + 14 : ty - 6, p.r, 'center',
       'bold 9px ui-monospace, monospace');
   }
 
@@ -896,8 +949,12 @@
     const tZ = clamp(target || 0, view.min, view.max);
     const u = b.u || 0;
     const accent = movingColor(b);
-    const span = view.max - view.min;
-    const px = (v) => groundY - ((v - view.min) / span) * (h - 100) - 12;
+    /* 高度镜头：以目标高度为构图基准（目标落在约 80% 高度），
+       机体爬升或超调时再向上扩展；避免固定量程下目标偏低、
+       看起来像「刚起飞就停下」。 */
+    const zTop = Math.max(2.5, tZ * 1.25, z * 1.08, 1);
+    const drawH = h - 110;
+    const px = (v) => groundY - (clamp(v, 0, zTop) / zTop) * drawH - 14;
     const cy = px(z);
     const cx = w / 2;
     const s = Math.min(w * 0.16, 62);
@@ -908,6 +965,7 @@
     ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(w, groundY); ctx.stroke();
     ctx.strokeStyle = p.muted; ctx.lineWidth = 1; ctx.globalAlpha = 0.7;
     view.ticks.forEach((tk) => {
+      if (tk > zTop + 1e-9) return;
       const gy = px(tk);
       ctx.beginPath(); ctx.moveTo(24, gy); ctx.lineTo(36, gy); ctx.stroke();
       ctx.fillStyle = p.muted; ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'left';
@@ -924,7 +982,7 @@
     label(ctx, 'r = ' + fmt(tZ, 2) + ' m', w - 18, ty - 6, p.r, 'right', 'bold 9px ui-monospace, monospace');
 
     /* 影子：高度越高越淡越大 */
-    const hRatio = clamp((z - view.min) / span, 0, 1);
+    const hRatio = clamp(z / zTop, 0, 1);
     ctx.save();
     ctx.globalAlpha = 0.22 * (1 - 0.75 * hRatio);
     ctx.fillStyle = p.text;
@@ -1347,11 +1405,12 @@
 
   /* ── 数据范围（缓存，避免每帧重复扫描） ─────────────── */
   /* angK：角度对象的显示换算系数（弧度 → 度）；其余对象为 1 */
-  function collectRanges(tracks, method, angK) {
+  function collectRanges(tracks, method, angK, seed) {
     const k = angK || 1;
+    const seedY = seed && Number.isFinite(seed.y) ? seed.y : 1;
     let count = 0;
     for (const t of tracks) count += t.points.length;
-    const key = tracks.length + ':' + count + ':' + (tracks.length ? tracks[tracks.length - 1].id : '') + ':' + method + ':' + k;
+    const key = tracks.length + ':' + count + ':' + (tracks.length ? tracks[tracks.length - 1].id : '') + ':' + method + ':' + k + ':' + seedY;
     if (rangeCache.key === key && rangeCache.value) return rangeCache.value;
 
     let minT = Infinity, maxT = -Infinity;
@@ -1377,7 +1436,7 @@
         if (pt.t > maxT) maxT = pt.t;
         consider(pt.x * k, 'y'); consider(pt.target * k, 'y'); consider(0, 'y');
         consider(pt.u, 'u'); consider(pt.hold, 'u'); consider(0, 'u');
-        consider(pt.x * k, 'x'); consider(pt.v, 'v');
+        consider(pt.x * k, 'x'); consider(pt.v * k, 'v');
         consider(pt.xc, 'c'); consider(pt.vc, 'cv');
         if (method === 'PPC' && Number.isFinite(pt.ref)) {
           consider((pt.target + pt.ref) * k, 'y'); consider((pt.target - pt.ref) * k, 'y');
@@ -1389,12 +1448,14 @@
     const span = maxT - minT;
     if (span < 0.5) maxT = minT + 0.5;
     else maxT = minT + span * 1.02;
-    if (!Number.isFinite(minY)) { minY = -1; maxY = 6; }
-    if (!Number.isFinite(minU)) { minU = -10; maxU = 10; }
-    if (!Number.isFinite(minX)) { minX = -5; maxX = 5; }
-    if (!Number.isFinite(minV)) { minV = -5; maxV = 5; }
-    if (!Number.isFinite(minC)) { minC = -2; maxC = 2; }
-    if (!Number.isFinite(minCV)) { minCV = -2; maxCV = 2; }
+    /* 空轨迹（刚切换对象/方法）不要退回固定的 -1..6 大窗口：
+       用当前目标值构造一个紧凑初值，避免首屏大片空白与原点悬空。 */
+    if (!Number.isFinite(minY)) { minY = Math.min(0, seedY); maxY = Math.max(1, seedY * 1.25); }
+    if (!Number.isFinite(minU)) { minU = -1; maxU = 1; }
+    if (!Number.isFinite(minX)) { minX = Math.min(0, seedY); maxX = Math.max(1, seedY * 1.15); }
+    if (!Number.isFinite(minV)) { minV = -1; maxV = 1; }
+    if (!Number.isFinite(minC)) { minC = -0.5; maxC = 0.5; }
+    if (!Number.isFinite(minCV)) { minCV = -0.5; maxCV = 0.5; }
     const value = {
       x: niceRange(minT, maxT, 0.015, 6),
       y: niceRange(minY, maxY, 0.1, 5),
@@ -1431,7 +1492,8 @@
     /* 角度对象按度显示（人类习惯），内部计算仍用弧度 */
     const angK = view.deg ? 180 / Math.PI : 1;
     const angUnit = view.deg ? '°' : plant.unit;
-    const R = collectRanges(tracks, method, angK);
+    const targetNow = sim.getActiveTarget();
+    const R = collectRanges(tracks, method, angK, { y: targetNow * angK });
     lastRange = { x: R.x, y: R.y, u: R.u, plant, view };
     const mainPts = active ? active.points : [];
 
@@ -1440,7 +1502,8 @@
     if (posSize) {
       const { ctx, w, h } = posSize;
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.x, y: R.y, xUnit: 's', xLabel: 't / s', yLabel: view.symbol + ' , r / ' + angUnit
+        x: R.x, y: R.y, xLabel: '时间 t (s)',
+        yLabel: (view.stateName || '状态') + ' ' + view.symbol + ', 目标 r (' + angUnit + ')'
       });
       clipPlot(ctx, axes.plot);
       plotSeries(ctx, mainPts, (pt) => pt.target * angK, p.r, axes, { width: 1.8 });
@@ -1466,8 +1529,8 @@
     if (phaseSize) {
       const { ctx, w, h } = phaseSize;
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.px, y: R.pv, xUnit: angUnit, xLabel: view.symbol + ' / ' + angUnit,
-        yLabel: (view.rateSymbol || 'v') + ' / ' + plant.vUnit
+        x: R.px, y: R.pv, xLabel: view.symbol + ' (' + angUnit + ')',
+        yLabel: (view.rateSymbol || 'v') + ' (' + (view.deg ? '°/s' : plant.vUnit) + ')'
       });
       clipPlot(ctx, axes.plot);
       for (const t of tracks) {
@@ -1478,13 +1541,13 @@
         ctx.beginPath(); ctx.strokeStyle = isActive ? p.phase : t.color; ctx.lineWidth = isActive ? 1.8 : 1.4;
         ctx.lineJoin = 'round';
         for (let i = 0; i < pts.length; i++) {
-          const px = axes.mapX(pts[i].x * angK), py = axes.mapY(pts[i].v);
+          const px = axes.mapX(pts[i].x * angK), py = axes.mapY(pts[i].v * angK);
           if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
         ctx.stroke(); ctx.restore();
         const last = pts[pts.length - 1];
         ctx.beginPath(); ctx.fillStyle = isActive ? p.u : t.color;
-        ctx.arc(axes.mapX(last.x * angK), axes.mapY(last.v), 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.arc(axes.mapX(last.x * angK), axes.mapY(last.v * angK), 3.5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
       drawCrosshair(ctx, axes, p, 'phase');
@@ -1495,8 +1558,8 @@
     if (ctrlSize) {
       const { ctx, w, h } = ctrlSize;
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.x, y: R.u, xUnit: 's', xLabel: 't / s',
-        yLabel: (plant.inputSymbol || 'u') + ' / ' + (plant.inputUnit || 'N')
+        x: R.x, y: R.u, xLabel: '时间 t (s)',
+        yLabel: (plant.inputSymbol || 'u') + ' (' + (plant.inputUnit || 'N') + ')'
       });
       clipPlot(ctx, axes.plot);
       // 稳态保持力参考线：解释「为什么累计能耗仍会增长」
@@ -1515,7 +1578,7 @@
     if (cartSize) {
       const { ctx, w, h } = cartSize;
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.x, y: R.c, xUnit: 's', xLabel: 't / s', yLabel: 'x_c / m'
+        x: R.x, y: R.c, xLabel: '时间 t (s)', yLabel: '小车位置 x_c (m)'
       });
       clipPlot(ctx, axes.plot);
       const st = sim.getSettings();
@@ -1536,15 +1599,17 @@
     if (velSize) {
       const { ctx, w, h } = velSize;
       const isPend = plant.id === 'pendulum';
+      const rateLabel = isPend ? '小车速度 v_c' : (view.rateSymbol || 'v');
+      const rateUnit = isPend ? plant.vUnit : (view.deg ? '°/s' : plant.vUnit);
       const axes = drawAxes(ctx, w, h, p, {
-        x: R.x, y: isPend ? R.cv : R.pv, xUnit: 's', xLabel: 't / s',
-        yLabel: (isPend ? 'v_c' : (view.rateSymbol || 'v')) + ' / ' + plant.vUnit
+        x: R.x, y: isPend ? R.cv : R.pv, xLabel: '时间 t (s)',
+        yLabel: rateLabel + ' (' + rateUnit + ')'
       });
       clipPlot(ctx, axes.plot);
-      const vKey = isPend ? 'vc' : 'v';
+      const valueOf = isPend ? (pt) => pt.vc : (pt) => pt.v * angK;
       for (const t of tracks) {
         const isActive = t === active;
-        plotSeries(ctx, t.points, vKey, isActive ? p.x : t.color, axes,
+        plotSeries(ctx, t.points, valueOf, isActive ? p.x : t.color, axes,
           { width: isActive ? 2.2 : 1.6, alpha: isActive ? 1 : 0.72 });
       }
       ctx.restore();
@@ -1621,21 +1686,25 @@
         const angUnit = degMode ? '°' : unit;
         if (tip && pt) {
           let text;
-          if (key === 'phase') text = sym + ' = ' + fmt(pt.x * k, 2) + ' ' + angUnit + '\n' + rateSym + ' = ' + fmt(pt.v, 3) + ' ' + vUnit;
+          const rateVal = degMode ? pt.v * k : pt.v;
+          const rateUnitTxt = degMode ? '°/s' : vUnit;
+          if (key === 'phase') text = sym + ' = ' + fmt(pt.x * k, 2) + ' ' + angUnit + '\n' + rateSym + ' = ' + fmt(rateVal, 2) + ' ' + rateUnitTxt;
           else if (key === 'ctrl') text = 't = ' + fmt(pt.t, 2) + ' s\n' + uSym + ' = ' + fmt(pt.u, 2) + ' ' + uUnit +
             '\n保持量 = ' + fmt(pt.hold, 2) + ' ' + uUnit;
           else if (key === 'cart') text = 't = ' + fmt(pt.t, 2) + ' s\nx_c = ' + fmt(pt.xc || 0, 3) + ' m';
           else if (key === 'vel') {
             const isPend = plantR && plantR.id === 'pendulum';
             text = 't = ' + fmt(pt.t, 2) + ' s\n' + (isPend ? 'v_c' : rateSym) + ' = ' +
-              fmt(isPend ? (pt.vc || 0) : pt.v, 3) + ' ' + vUnit;
+              fmt(isPend ? (pt.vc || 0) : rateVal, 2) + ' ' + (isPend ? 'm/s' : rateUnitTxt);
           }
           else text = 't = ' + fmt(pt.t, 2) + ' s\n' + sym + ' = ' + fmt(pt.x * k, 2) + ' ' + angUnit +
             '\nr = ' + fmt(pt.target * k, 2) + ' ' + angUnit;
           tip.textContent = text;
           tip.hidden = false;
-          tip.style.left = clamp(x + 12, 4, Math.max(4, rect.width - 140)) + 'px';
-          tip.style.top = clamp(y + 12, 4, Math.max(4, rect.height - 68)) + 'px';
+          /* 按提示框自身尺寸避让画布边界，避免长文本溢出卡片 */
+          const tw = tip.offsetWidth || 140, th = tip.offsetHeight || 54;
+          tip.style.left = clamp(x + 12, 4, Math.max(4, rect.width - tw - 4)) + 'px';
+          tip.style.top = clamp(y + 12, 4, Math.max(4, rect.height - th - 4)) + 'px';
         }
         sim.markDirty();
       }, { passive: true });
@@ -1701,7 +1770,7 @@
       const ctx = out.getContext('2d');
       ctx.fillStyle = p.surface; ctx.fillRect(0, 0, out.width, out.height);
       ctx.fillStyle = p.text; ctx.font = 'bold 20px sans-serif';
-      ctx.fillText('控制理论模拟器 V3.0 · ' + sim.getSettings().method + ' · ' + sim.getPlant().name, pad, pad + 20);
+      ctx.fillText('控制理论模拟器 V' + D.VERSION + ' · ' + sim.getSettings().method + ' · ' + sim.getPlant().name, pad, pad + 20);
       ctx.fillStyle = p.muted; ctx.font = '12px sans-serif';
       ctx.fillText(new Date().toLocaleString(), pad, pad + 38);
       let x = pad;

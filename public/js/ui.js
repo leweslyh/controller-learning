@@ -1,4 +1,4 @@
-﻿/* ============================================================
+﻿﻿/* ============================================================
    ui.js — 界面层（DOM 构建与局部更新；状态写回全部交给 app.js）
    V4.0：TeX 公式渲染、被控对象选择、能耗口径说明、坐标轴指标外置。
    ============================================================ */
@@ -8,15 +8,12 @@
   const D = NS.data;
   const sim = NS.sim;
   const doc = global.document;
-  const $ = (id) => doc.getElementById(id);
+  const U = NS.utils;
+  const $ = U.$;
 
-  /* 会画出辅助参考流形（alg.ref_display）的方法清单：
+  /* 会画出辅助参考流形（alg.ref_display）的方法清单：单一来源在 data.js，
      与 simulation.js 中实际写 ref_display 的 case 一一对应 */
-  const REF_FLOW_METHODS = [
-    'MRAC', 'MRAC-MIT', 'Composite-MRAC', 'L1', 'Flatness-Trajectory-Track',
-    'InputShaping', 'Posicast', 'PPC', 'Funnel-Control', 'TimeVary-BLF',
-    'RampSP-PID', 'TubeMPC', 'DMC-DynamicMatrix', 'Lorenz-Coupled'
-  ];
+  const REF_FLOW_METHODS = D.REF_FLOW_METHODS;
 
   /* 理论体系章节号：与参考站点的中文数字编号保持一致 */
   const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
@@ -55,14 +52,8 @@
   /* 是否存在可撤销的求解记录（V5.1） */
   let solveUndoAvailable = false;
 
-  function esc(value) {
-    return String(value === undefined || value === null ? '' : value)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-  function icon(name) {
-    return '<svg class="icon" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
-  }
+  const esc = U.esc;
+  const icon = U.icon;
   function decimals(step) {
     const s = String(step || 1);
     if (s.indexOf('.') < 0) return 0;
@@ -553,7 +544,7 @@
     const modeNote = current === 'pendulum'
       ? '<p class="track-hint fit-note">当前评级模式：' + (useReal ? '真实动力学（辅助关闭）' : '教学稳定（辅助 PI 开启）') + '。</p>'
       : '';
-    return '<div class="fit-row"><span class="fit-label">适用对象</span>' + chips + '</div>' + warn + modeNote;
+    return '<div class="fit-row">' + chips + '</div>' + warn + modeNote;
   }
 
   /* 控制律宽度自适应：宁可缩小字号，也不把公式折成两行。
@@ -570,9 +561,11 @@
     const base = parseFloat(global.getComputedStyle(mathEl).fontSize) || 22;
     mathEl.style.fontSize = base + 'px';
     const avail = wrap.clientWidth - 4;
-    const need = mathEl.scrollWidth;
+    /* 用实际渲染宽度而非 scrollWidth：flex 居中时 scrollWidth 可能等于容器宽，
+       会误判为「放得下」，导致长公式两侧被裁切。 */
+    const need = mathEl.getBoundingClientRect().width || mathEl.scrollWidth;
     if (need > avail && need > 0) {
-      mathEl.style.fontSize = Math.max(14, Math.round(base * avail / need * 10) / 10) + 'px';
+      mathEl.style.fontSize = Math.max(12, Math.round(base * avail / need * 10) / 10) + 'px';
     }
   }
 
@@ -641,6 +634,21 @@
     global.addEventListener('resize', () => { syncColumnHeights(); syncStageHead(); });
   }
 
+  /* 档案标题只保留中文：去掉英文翻译括注与句首英文缩写；
+     若只剩“控制”这类过短词（如 I-PD 控制），则保留原名避免语义丢失。 */
+  function profileDisplayName(name) {
+    const cn = (s) => (String(s).match(/[\u4e00-\u9fff]/g) || []).length;
+    let out = String(name || '')
+      .replace(/\s*[（(]\s*[^（()）]*[A-Za-z][^（()）]*[)）]/g, '')
+      .trim();
+    const m = out.match(/^[A-Za-zÅÄÖØÆ][A-Za-z0-9ÅÄÖØÆ&+\-–—/.∞]*\s+([\s\S]+)$/);
+    if (m) {
+      const main = m[1].split(/[（(]/)[0];
+      if (cn(main) >= 3) out = m[1].trim();
+    }
+    return out.replace(/\s{2,}/g, ' ').trim();
+  }
+
   function renderProfile(key) {
     const host = $('controller-profile');
     const conf = D.CONTROLLER_CONFIGS[key];
@@ -655,13 +663,14 @@
     const catMatch = String(conf.category).match(/^(\d+)\.\s*(.*)$/);
     const catNo = catMatch ? catMatch[1] : '';
     const catName = catMatch ? catMatch[2] : String(conf.category);
+    const fitHtml = fitBlock(key);
     host.innerHTML = '<div class="profile">' +
       '<div class="profile-head">' +
         '<span class="profile-cat">' +
           (catNo ? '<b class="cat-no">' + esc(catNo) + '</b>' : '') +
           '<span class="cat-name">' + esc(catName) + '</span>' +
         '</span>' +
-        '<h3 class="profile-name">' + esc(conf.name) + '</h3>' +
+        '<h3 class="profile-name">' + esc(profileDisplayName(conf.name)) + '</h3>' +
       '</div>' +
       '<div class="profile-actions">' +
         '<button type="button" class="chip-btn" id="btn-profile-docs" title="打开本方法的初学者教学文档">' +
@@ -669,7 +678,10 @@
         '<button type="button" class="chip-btn" id="btn-profile-star" aria-pressed="' + isFav + '" title="收藏/取消收藏">' +
         icon('star') + (isFav ? '已收藏' : '收藏') + '</button>' +
       '</div>' +
-      fitBlock(key) +
+      (fitHtml ? '<details class="profile-block"><summary>' +
+        '<span class="fold-box">' + icon('chevron') + '</span>' +
+        '<span>适用对象</span></summary>' +
+        '<div class="fit-details">' + fitHtml + '</div></details>' : '') +
       (approx ? '<p class="profile-note">' + icon('info') + '<span>' + esc(D.APPROXIMATION_NOTE) + '</span></p>' : '') +
       '<figure class="profile-eq eq-card">' +
         '<figcaption class="eq-card-head">' +
@@ -936,7 +948,8 @@
     items.push({ label: inName + ' ' + inSym + ' (' + inUnit + ')', color: 'var(--curve-u)' });
     items.push({ label: holdName + ' ' + inSym + 'ₕ (' + inUnit + ')', color: 'var(--accent-strong)', dash: true });
     const vSym = pv.rateSymbol || 'v', xSym = pv.symbol || 'x';
-    items.push({ label: '相轨迹 ' + vSym + ' vs ' + xSym, color: 'var(--curve-phase)', dot: true });
+    const vUnitLegend = pv.deg ? '°/s' : plant.vUnit;
+    items.push({ label: '相轨迹 ' + vSym + ' (' + vUnitLegend + ') vs ' + xSym + ' (' + angUnit + ')', color: 'var(--curve-phase)', dot: true });
     const tracks = sim.getTracks();
     if (tracks.length > 1) {
       tracks.forEach((t) => items.push({ label: '轨迹 ' + t.label + ' · ' + shortName(t.method), color: t.color, dot: true }));
@@ -1102,7 +1115,7 @@
       '<section class="help-section"><h3>为什么到达目标后能耗还在增加？</h3><p>' +
       '<strong>累计能耗 ∫u²dt</strong> 统计控制器输出的总能量。在弹簧负载或倒立摆等对象上，稳态时仍需持续的<strong>保持力 uₕ</strong>（例如弹簧对象 uₕ = k·r）来抵消回复力，u² 不为零，因此累计能量会线性增长——这是物理上正确的，但把「维持代价」与「调节代价」混在了一起。' +
       '为此平台同时给出 <strong>动态能耗 ∫(u−uₕ)²dt</strong>，它扣除保持力，收敛后趋于平稳，更适合比较控制器的动态品质；控制力图中的橙色虚线就是 uₕ。' +
-      '此外波形定格（主状态误差与速度均低于 0.02、倒立摆还要求小车基本静止、稳定 2 秒，或累计 2500 点）后 RMSE 与两种能耗同步冻结，不再累加；需要继续观察请点状态栏「重新录制」。</p></section>' +
+      '此外波形按统一规则定格：误差与速度连续 2 秒进入收敛带（默认 0.02，双容液位 0.01；倒立摆还要求小车速度 < 0.03），或曲线累计 2500 点。定格后 RMSE 与两种能耗同步冻结，不再累加；需要继续观察请点状态栏「重新录制」。</p></section>' +
       '<section class="help-section"><h3>公式格式</h3><p>所有控制律与被控对象方程以标准 TeX 语法存储，优先由本地随包 KaTeX 排版（零网络请求），KaTeX 不可用时自动回退到内置 MathML/HTML 轻量渲染器（分数、根号、上下标、重音、大运算符）。需要公式源码可从导出菜单获取公式手册 Markdown。</p></section>' +
       '<section class="help-section"><h3>快捷键</h3><table class="keys-table"><thead><tr><th>按键</th><th>功能</th></tr></thead><tbody>' +
       rows.map((r) => '<tr><td><kbd>' + esc(r[0]) + '</kbd></td><td>' + esc(r[1]) + '</td></tr>').join('') +
@@ -1173,7 +1186,14 @@
     if (handler) { el.removeEventListener('keydown', handler); focusTraps.delete(el); }
   }
   function closeAllOverlays() {
-    ['overlay-glossary', 'overlay-presets', 'overlay-help', 'overlay-guide', 'overlay-plant', 'overlay-zoom'].forEach(closeOverlay);
+    ['overlay-glossary', 'overlay-presets', 'overlay-help', 'overlay-guide',
+      'overlay-learn', 'overlay-plant', 'overlay-zoom', 'overlay-assistant-settings'].forEach(closeOverlay);
+    /* 文档阅读器有独立的焦点恢复与哈希收尾逻辑，必须走 docs.close() */
+    const docsOverlay = doc.getElementById('overlay-docs');
+    if (docsOverlay && !docsOverlay.hidden) {
+      if (NS.docs && NS.docs.close) NS.docs.close();
+      else docsOverlay.hidden = true;
+    }
     closeExportMenu();
   }
   function openOverlayById(id) { closeAllOverlays(); openOverlay(id); }
@@ -1344,6 +1364,11 @@
     doc.querySelectorAll('.browser-tabs .tab').forEach((tab) => {
       tab.addEventListener('click', () => {
         scope = tab.dataset.scope;
+        /* 收藏按钮与「收藏」标签页是同一筛选项：切到其它页时必须解除，
+           否则列表会继续只显示收藏，表现为 tab 点击无效 */
+        starFilter = scope === 'favorites';
+        const starBtn = $('btn-star-filter');
+        if (starBtn) starBtn.setAttribute('aria-pressed', String(starFilter));
         doc.querySelectorAll('.browser-tabs .tab').forEach((t) => {
           const active = t === tab;
           t.classList.toggle('is-active', active);

@@ -1156,7 +1156,7 @@ a { color: var(--green-deep); }
   color: var(--faint-ink);
 }
 .eq-card-main {
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: safe center;
   min-height: 62px;
   padding: 13px 9px 15px;
   overflow-x: auto; overflow-y: hidden;
@@ -2056,6 +2056,11 @@ input[type="range"]:focus-visible { outline: 2px solid var(--green); outline-off
   border-radius: var(--r-sm); background: color-mix(in srgb, var(--danger) 8%, transparent);
   color: var(--danger); font-size: var(--fs-xs); line-height: 1.6;
 }
+/* 「适用对象」折叠块：与参数意义 / 调参指引同一套 profile-block 外观 */
+.profile-block .fit-details { padding: 10px 10px 12px; }
+.profile-block .fit-details .fit-row { margin: 0; }
+.profile-block .fit-details .fit-warn { margin: 8px 0 0; padding: 7px 10px; }
+.profile-block .fit-details .fit-note { margin: 8px 0 0; padding: 0; }
 
 /* MathML 主渲染路径：交给浏览器数学排版引擎 */
 .math.mathml { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif; }

@@ -28,8 +28,9 @@
   let lastToggleDrag = 0;
   let state = { color: '#151715', position: null, togglePos: null };
 
-  function $(id) { return doc.getElementById(id); }
-  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  const U = NS.utils;
+  const $ = U.$;
+  const clamp = U.clamp;
   function dpr() { return Math.min(global.devicePixelRatio || 1, MAX_DPR); }
 
   /* ── 持久化：只存颜色与工具条位置 ─────────────────────── */

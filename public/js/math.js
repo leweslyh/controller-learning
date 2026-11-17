@@ -38,10 +38,7 @@
   const BIG_OPS = new Set(['int', 'sum', 'prod', 'oint']);
   const SPACING = { ',': '0.18em', ':': '0.22em', ';': '0.28em', '!': '-0.16em', quad: '1em', qquad: '2em' };
 
-  function esc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  const esc = NS.utils.esc;
 
   /* ── MathML 主路径：交给浏览器数学排版引擎 ─────────
      分数、重音、运算符间距由 MathML 自动处理，避免 HTML 手工

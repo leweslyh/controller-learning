@@ -13,7 +13,7 @@
   const doc = global.document;
   const STORAGE_KEY = 'ctrlsim.v4.prefs';
   const LEGACY_STORAGE_KEY = 'ctrlsim.v3.prefs';
-  const VERSION = '6.0';
+  const VERSION = D.VERSION;
 
   let prefs = loadPrefs();
   let rafId = null;
@@ -314,7 +314,8 @@
     const s = sim.getSettings();
     const env = {};
     ['targetMode', 'initialX', 'contDisturbance', 'actuatorLimit', 'sensorNoise',
-      'coulombFriction', 'actuatorDeadzone', 'plantDelay', 'speed'].forEach((k) => { env[k] = s[k]; });
+      'coulombFriction', 'actuatorDeadzone', 'plantDelay', 'speed',
+      'balanceAssist', 'cartLoop', 'cartTarget', 'cartKp', 'cartKd', 'cartThetaMax'].forEach((k) => { env[k] = s[k]; });
     const payload = {
       v: VERSION, m: s.method, c: s.ctrlParams, p: s.physParams, e: env,
       plant: s.plantId, pp: s.plantParams
@@ -364,28 +365,42 @@
       const payload = JSON.parse(decodeURIComponent(match[1]));
       if (!payload || !D.CONTROLLER_CONFIGS[payload.m]) return false;
       const s = sim.getSettings();
+      /* 分享链接一律走 setParam：保留范围钳制、NaN 拒绝与执行器联动，
+         避免构造链接直接写入越界值或非有限数（旧实现直接改 settings）。 */
       if (payload.plant && D.PLANTS[payload.plant]) {
         /* 必须走 setPlant：否则执行器限幅/初值/单位仍停留在上一个对象，
            分享链接会把 uav 的 20 N·m 限幅恢复成默认 200（V5.1 修复） */
         sim.setPlant(payload.plant);
-        if (payload.pp && typeof payload.pp === 'object') {
-          Object.keys(payload.pp).forEach((id) => {
-            if (!s.plantParams[id]) s.plantParams[id] = {};
-            Object.assign(s.plantParams[id], payload.pp[id]);
-          });
-        }
       }
-      if (payload.p) Object.assign(s.physParams, payload.p);
-      if (payload.e) {
+      if (payload.pp && typeof payload.pp === 'object') {
+        Object.keys(payload.pp).forEach((id) => {
+          const values = payload.pp[id];
+          if (!D.PLANTS[id] || !values || typeof values !== 'object') return;
+          if (id === s.plantId) {
+            Object.keys(values).forEach((k) => sim.setParam(k, values[k], 'plant'));
+            return;
+          }
+          /* 非当前对象的参数先缓存，切回该对象时生效；只接受有限数值或字符串 */
+          if (!s.plantParams[id]) s.plantParams[id] = {};
+          Object.keys(values).forEach((k) => {
+            const v = values[k];
+            if (typeof v === 'number' ? Number.isFinite(v) : typeof v === 'string') s.plantParams[id][k] = v;
+          });
+        });
+      }
+      if (payload.p && typeof payload.p === 'object') {
+        Object.keys(payload.p).forEach((k) => sim.setParam(k, payload.p[k], 'phys'));
+      }
+      if (payload.e && typeof payload.e === 'object') {
         Object.keys(payload.e).forEach((k) => {
-          if (k !== 'speed' && k in s) s[k] = payload.e[k];
+          if (k !== 'speed' && k in s) sim.setParam(k, payload.e[k]);
         });
         if (Number.isFinite(payload.e.speed)) sim.setSpeed(payload.e.speed);
       }
       sim.setMethod(payload.m);
-      if (payload.c) {
+      if (payload.c && typeof payload.c === 'object') {
         Object.keys(payload.c).forEach((k) => {
-          if (k in s.ctrlParams) s.ctrlParams[k] = payload.c[k];
+          if (k in s.ctrlParams) sim.setParam(k, payload.c[k], 'ctrl');
         });
       }
       sim.resetSim(payload.m, s.physParams.target, s.initialX);

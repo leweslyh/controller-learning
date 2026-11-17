@@ -1,6 +1,6 @@
 {
   "name": "control-theory-simulator",
-  "version": "6.0.0",
+  "version": "6.3.0",
   "private": true,
   "description": "纸面控制实验室 · 159 法 × 11 对象的离线控制理论教学实验台（前端零依赖，以下仅开发期工具）",
   "scripts": {

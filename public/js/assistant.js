@@ -1,10 +1,10 @@
 /* ============================================================
-   assistant.js — 智能助手（V6.0）
+   assistant.js — 智能助手（V6.3）
    ------------------------------------------------------------
    · 可拖动、可记忆位置的非模态浮窗，沿用纸面实验室设计令牌
    · 后端：同源 Netlify Functions 2.0（netlify/functions/chat.js）
      auto 模式下代理失败会自动回落浏览器直连，file:// 直开则只走直连
-   · RAG：V6.0 的 public/docs/methods/*.md → window.__DOCS__，
+   · RAG：V6.3 的 public/docs/methods/*.md → window.__DOCS__，
      按 ## 章节分块，BM25 + 方法名加权，并强制关联当前实验方法文档
    · DeepSeek 设置：API Key（使用者输入、仅存 localStorage）、
      模型（deepseek-flash / deepseek-v4-pro）、思考长度
@@ -67,14 +67,11 @@
   let lastFocus = null;
 
   /* ── 工具 ───────────────────────────────────────────── */
-  function $(id) { return doc.getElementById(id); }
-  function esc(v) {
-    return String(v === undefined || v === null ? '' : v)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-  function icon(name) { return '<svg class="icon" aria-hidden="true"><use href="#i-' + name + '"/></svg>'; }
-  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  const U = NS.utils;
+  const $ = U.$;
+  const esc = U.esc;
+  const icon = U.icon;
+  const clamp = U.clamp;
   function toast(msg) { if (NS.ui && NS.ui.toast) NS.ui.toast(msg); }
   function validEndpoint(v) {
     return typeof v === 'string' && v.indexOf('/api/') === 0 && /^\/[\w./-]*$/.test(v);
@@ -250,11 +247,14 @@
     });
   }
   function buildIndex() {
-    if (chunks) return;
     const bundle = global.__DOCS__ || {};
+    const bundleCount = Object.keys(bundle).length;
+    /* 文档包按需注入：首次检索可能发生在注入完成前。索引缓存必须随文档数量失效，
+       否则空索引会被永久复用，整个会话的 RAG 都检索不到正文。 */
+    if (chunks && chunks.length && bundleCount === docCount) return;
     const configs = (NS.data && NS.data.CONTROLLER_CONFIGS) || {};
     chunks = [];
-    docCount = Object.keys(bundle).length;
+    docCount = bundleCount;
     Object.keys(bundle).forEach((key) => {
       const entry = bundle[key] || {};
       const meta = entry.meta || {};
@@ -794,7 +794,7 @@
   function renderWelcome() {
     el.body.innerHTML = '';
     appendMessage('bot', renderText(
-      '你好，我是**控制助教**：以本机 V6.0 文档为底库，结合当前实验的方法、参数与对象回答。\n' +
+      '你好，我是**控制助教**：以本机 V6.3 文档为底库，结合当前实验的方法、参数与对象回答。\n' +
       '- 在「设置」里填入 DeepSeek API Key（只存本机浏览器）即可提问，可选模型与思考长度\n' +
       '- 每轮自动带上当前方法文档；未连接时自动降级为本地文档摘录\n' +
       '- 说「记住：…」可追加长期记忆；问「PID 参数怎么调」「滑模为什么抖振」都可以'

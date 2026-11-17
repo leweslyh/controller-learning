@@ -14,6 +14,9 @@
     DEFAULT_ENV, DEFAULT_PHYS
   } = D;
 
+  /* 共享工具：clampFinite 保持旧语义——非有限值按 0 处理后再钳制 */
+  const clamp = NS.utils.clampFinite;
+
   const MAX_POINTS = 2500;
   const MAX_TRACKS = 6;
   const TRACK_COLORS = ['#2563EB', '#EA580C', '#7C3AED', '#059669', '#DC2626', '#0891B2'];
@@ -26,8 +29,7 @@
 
   /* ── 与 V2.1 的 useRef 等价的容器（保留 *.current 访问形态） ── */
   const stateRef = { current: { x: 0, v: 0, t: 0, alg: {} } };
-  /* 全局饱和钳位：与新版一致，带 NaN/Infinity 保护（新增 35 条控制律依赖） */
-  function clamp(val, min, max) { return Math.max(min, Math.min(max, Number.isFinite(val) ? val : 0)); }
+  /* 全局饱和钳位：由核心工具 clampFinite 提供，带 NaN/Infinity 保护（新增 35 条控制律依赖） */
   const historyRef = { current: [] };
   const chartStateRef = { current: { frozen: false, freezeTimer: 0 } };
   const impulseRef = { current: 0 };
@@ -71,7 +73,7 @@
                     x_delay_buf: new Array(200).fill(0), u_delay_buf: new Array(200).fill(0), u_hw_buffer: new Array(100).fill(0),
                     H_hormone: 0, P_sdre: 10.0, chi_nuss: 0, amd_x: 0, amd_v: 0, fault_time: 0, l_x: 0, l_v: 0, mj_mode: 1, st_next: 0, f_int: 0, u_hold: 0,
                     w_rbf: new Array(5).fill(0.1), w_actor: [0, 0, 0], w_critic: [0, 0, 0], P_rls: [[100, 0], [0, 100]], theta_rls: [1.0, 0.5],
-                    l_x_l: 0.1, l_y_l: 0.1, l_z_l: 0.1, pf_particles: new Array(20).fill(0), f_adrc_z: 0,
+                    l_x_l: 0.1, l_y_l: 0.1, l_z_l: 0.1, pf_particles: new Array(50).fill(0), f_adrc_z: 0,
                     a_filt: 0,
                     d_filt: 0,
                     e0_init: 0,
@@ -1404,13 +1406,21 @@ default: u = 0;
                 state.t += DT;
 
                 // 冻结判定必须使用当前指令值（阶跃/正弦/方波通用）
+                /* 收敛带统一由 PLANT_VIEWS 声明（settleTol / rateTol / cartTol），
+                   默认 0.02（弧度或米）与 0.02/s；液位过程更严（0.01），
+                   倒立摆额外要求小车速度 < 0.03。连续满足 2 s 才定格，
+                   另以 2500 点作为曲线长度上限的兜底。 */
+                const view = D.PLANT_VIEWS[plant.id] || {};
+                const settleTol = view.settleTol || 0.02;
+                const rateTol = view.rateTol || 0.02;
+                const cartTol = view.cartTol || 0.03;
                 const err = Math.abs(state.x - activeTarget);
                 const absV = Math.abs(state.v);
                 /* 倒立摆额外要求小车基本静止：非零目标角或残留稳态角误差会让
                    小车持续加速，此时摆角虽“接近目标”但系统并未真正收敛，
                    不应定格（否则曲线被截断、看起来误差没收敛）。 */
-                const cartStill = plant.id !== 'pendulum' || Math.abs(state.vc || 0) < 0.03;
-                const settled = err < 0.02 && absV < 0.02 && cartStill;
+                const cartStill = plant.id !== 'pendulum' || Math.abs(state.vc || 0) < cartTol;
+                const settled = err < settleTol && absV < rateTol && cartStill;
                 if (settled && state.t > 1.0) {
                     chartStateRef.current.freezeTimer += DT;
                 } else {
@@ -1715,11 +1725,13 @@ default: u = 0;
 
   /* ── 与 V2.1 交互等价的状态操作 ──────────────────── */
   function resetSim(method = settings.method, target = settings.physParams.target, initX = settings.initialX) {
+    /* A/B 对比：先封存当前轨迹的指标与方法名，再替换状态。
+       若先替换 stateRef/settings.method，syncTrack 会把旧轨迹写成新方法的空指标。 */
+    if (compareMode && tracks.length) syncTrack();
     settings.method = method;
     stateRef.current = { x: initX, v: 0, xc: 0, vc: 0, t: 0, alg: {} };
     resetAlgState(method, target);
     if (compareMode && tracks.length) {
-      syncTrack();
       createTrack();
     } else {
       tracks = [];
@@ -1775,7 +1787,7 @@ default: u = 0;
 
   function setMethod(method) {
     if (!CONTROLLER_CONFIGS[method]) return false;
-    settings.method = method;
+    /* 不先改 settings.method：A/B 对比时 resetSim 需要用它给旧轨迹封存正确的方法名 */
     applyTuning(method);
     resetSim(method, settings.physParams.target, settings.initialX);
     return true;
@@ -1866,6 +1878,7 @@ default: u = 0;
     Object.assign(settings, DEFAULT_ENV);
     settings.speed = 1;
     const plant = getPlant();
+    settings.actuatorLimit = plant.defaultActuatorLimit || DEFAULT_ENV.actuatorLimit;
     settings.plantParams[plant.id] = { ...plant.defaults };
     settings.physParams.target = plant.defaultTarget;
     settings.initialX = plant.defaultInitialX || 0;
@@ -1891,6 +1904,9 @@ default: u = 0;
           else if (INITIAL_PARAMS[item.key] !== undefined) settings.physParams[item.key] = INITIAL_PARAMS[item.key];
         } else if (item.key === 'initialX') {
           settings.initialX = plant.defaultInitialX || 0;
+        } else if (item.key === 'actuatorLimit') {
+          /* 限幅默认值随对象量纲：uav 20 N·m、飞机 60 N·m，而非全局 200 */
+          settings.actuatorLimit = plant.defaultActuatorLimit || DEFAULT_ENV.actuatorLimit;
         } else if (DEFAULT_ENV[item.key] !== undefined) {
           settings[item.key] = DEFAULT_ENV[item.key];
         }
@@ -1909,10 +1925,17 @@ default: u = 0;
     const pid = settings.plantId;
     if (!settings.plantParams[pid]) settings.plantParams[pid] = { ...D.PLANTS[pid].defaults };
     if (preset.plantParams) Object.assign(settings.plantParams[pid], preset.plantParams);
-    settings.method = preset.method;
+    /* 不提前写 settings.method：交由 resetSim 统一更新，A/B 下旧轨迹才能保留原方法名 */
     settings.physParams = { ...DEFAULT_PHYS, ...(preset.phys || {}) };
     if (!preset.phys || preset.phys.target === undefined) settings.physParams.target = getPlant().defaultTarget;
     Object.assign(settings, DEFAULT_ENV, preset.env || {});
+    /* 预设普遍展开 DEFAULT_ENV，actuatorLimit 会带着全局 200 一起进来。
+       只有预设显式给出「与全局默认不同」的限幅才尊重它（如 motor-sat=3），
+       否则回到当前对象的默认量程（uav 20 N·m 等）。 */
+    const envLimit = preset.env ? preset.env.actuatorLimit : undefined;
+    if (envLimit === undefined || envLimit === DEFAULT_ENV.actuatorLimit) {
+      settings.actuatorLimit = getPlant().defaultActuatorLimit || DEFAULT_ENV.actuatorLimit;
+    }
     applyTuning(preset.method);
     Object.keys(preset.ctrl || {}).forEach((k) => {
       if (k in settings.ctrlParams) settings.ctrlParams[k] = preset.ctrl[k];
@@ -1942,7 +1965,12 @@ default: u = 0;
     activeTrack.frozen = false;
     activeTrack.freezeTimer = 0;
     const alg = stateRef.current.alg;
-    if (alg) { alg.rmse_sum = 0; alg.energy = 0; alg.energy_dyn = 0; alg.ticks = 0; }
+    if (alg) {
+      /* 重录等同重新开始：累计量、超调、调节时间与抖振统计都要回到初始态 */
+      alg.rmse_sum = 0; alg.energy = 0; alg.energy_dyn = 0; alg.ticks = 0;
+      alg.max_overshoot = 0; alg.t_settle = undefined;
+      alg.u_m1 = undefined; alg.u_m2 = undefined; alg.sw_rate = 0;
+    }
     syncTrack();
     markDirty();
   }
@@ -2030,17 +2058,12 @@ default: u = 0;
   }
   function setCompareMode(value) { compareMode = !!value; }
   function isCompareMode() { return compareMode; }
-  function clearTracks() { tracks = []; trackSeq = 0; createTrack(); }
   function getTracks() { return tracks; }
   function getActiveTrack() { return activeTrack; }
-  function getHistory() { return historyRef.current; }
   function getState() { return stateRef.current; }
-  function getAlg() { return stateRef.current.alg; }
   function getSettings() { return settings; }
   function getImpulse() { return impulseRef.current; }
-  function getChartState() { return chartStateRef.current; }
   function isFrozen() { return chartStateRef.current.frozen; }
-  function getMaxPoints() { return MAX_POINTS; }
 
   /* ── 初始化（与 V2.1 的初始状态一致：PID、待机） ───── */
   resetAlgState('PID', INITIAL_PARAMS.target);
@@ -2053,9 +2076,9 @@ default: u = 0;
     optimizeGains, fastForward, duel,
     triggerDisturbance, rerecord, advance, stepOnce,
     setRunning, toggleRun, setSpeed, setCompareMode, isCompareMode,
-    clearTracks, getTracks, getActiveTrack, getHistory,
-    getState, getAlg, getSettings, getMetrics, getActiveTarget,
-    getImpulse, getChartState, isFrozen, getMaxPoints,
+    getTracks, getActiveTrack,
+    getState, getSettings, getMetrics, getActiveTarget,
+    getImpulse, isFrozen,
     markDirty, consumeDirty
   };
 })(window);

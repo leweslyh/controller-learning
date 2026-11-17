@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /* ============================================================
-   tools/verify-v5.js — V5.0 全量静态验收（仅 Node 内置模块）
+   tools/verify-v5.js — V6.1 全量静态验收（仅 Node 内置模块）
    运行：node tools/verify-v5.js
-   覆盖：脚本语法 / 159·12·6 计数 / 文档键名对齐 / 索引链接 /
+   覆盖：脚本语法 / 159·12·11 计数 / 文档键名对齐 / 索引链接 /
         预设 plant 完整性 / 参考流形键与实现一致 / 参数标签重复键 /
         倒立摆符号自洽 / setParam 钳制 / 文案与无障碍静态条件
    ============================================================ */
@@ -56,6 +56,7 @@ ok(synBad.length === 0, 'public/js ' + jsFiles.length + ' 个脚本语法', synB
 section('2. 数据层计数');
 const sandbox = { console, Math, Date, JSON, Array, Object, Number, String, Boolean, RegExp, Error, Map, Set, parseFloat, parseInt, isNaN, isFinite };
 sandbox.window = sandbox;
+new Function('window', read(path.join(jsDir, 'core.js')))(sandbox);
 new Function('window', read(path.join(jsDir, 'data.js')))(sandbox);
 const D = sandbox.CtrlSim.data;
 const keys = Object.keys(D.CONTROLLER_CONFIGS);
@@ -224,10 +225,14 @@ ok(noIface.length === 0, '每个对象接口完整（effective/accel/holdForce/r
 /* ── 5. 参考流形键名与实现一致 ── */
 section('5. 参考流形图例');
 const uiSrc = read(path.join(jsDir, 'ui.js'));
-const refBlock = uiSrc.match(/REF_FLOW_METHODS\s*=\s*\[([\s\S]*?)\]/);
+const chartsSrc = read(path.join(jsDir, 'charts.js'));
+const refSrc = read(path.join(jsDir, 'data.js'));
+const refBlock = refSrc.match(/REF_FLOW_METHODS\s*[:=]\s*\[([\s\S]*?)\]/);
 const refKeys = refBlock ? [...refBlock[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
 const refInvalid = refKeys.filter((k) => !D.CONTROLLER_CONFIGS[k]);
 ok(refKeys.length > 0 && refInvalid.length === 0, 'REF_FLOW 键全部存在于配置', refInvalid.join(','));
+ok(uiSrc.indexOf('REF_FLOW_METHODS = D.REF_FLOW_METHODS') >= 0 &&
+  chartsSrc.indexOf('REF_FLOW_METHODS = D.REF_FLOW_METHODS') >= 0, 'REF_FLOW 由 data.js 单一来源下发');
 const simSrc = read(path.join(jsDir, 'simulation.js'));
 const implSet = new Set();
 let cur = '';
@@ -313,7 +318,8 @@ ok(html.indexOf('id="browser-search"') >= 0, '左栏搜索框存在');
 ok(uiSrc.indexOf('3 个经典被控对象') < 0 && uiSrc.indexOf('无需 KaTeX') < 0, '帮助文案无过时表述');
 ok(uiSrc.indexOf("['/', '聚焦左栏方法搜索']") >= 0, '帮助快捷键表含 /');
 const appSrc = read(path.join(jsDir, 'app.js'));
-ok(appSrc.indexOf("VERSION = '6.0'") >= 0, '分享版本号 6.0');
+ok(appSrc.indexOf('VERSION = D.VERSION') >= 0 && /const VERSION = '6\.3'/.test(dataSrc),
+  '版本号单一来源 6.3');
 ok(appSrc.indexOf("case '/'") >= 0, '/ 快捷键已实现');
 ok(appSrc.indexOf('150 * (plant.disturbanceScale || 1)') >= 0, '扰动 toast 随对象缩放');
 const css = read(path.join(app, 'styles.css'));
@@ -338,8 +344,28 @@ ok(/\.paper-foot\s*\{[^}]*justify-content:\s*center/.test(css), '查看原文按
   ok(/plants:\s*11/.test(read(path.join(root, f))), f + ' 自述 11 对象');
 });
 
+/* ── 11. 可视化规范（V6.2） ── */
+section('11. 可视化规范');
+ok(chartsSrc.indexOf('时间 t (s)') >= 0 && chartsSrc.indexOf('xUnit') < 0,
+  '坐标轴单位统一写入括号');
+ok(chartsSrc.indexOf('function controlArc') >= 0 &&
+  chartsSrc.indexOf('controlArc(ctx, p, cx, pivotY') >= 0 &&
+  chartsSrc.indexOf('forceArrow(b, cartX, pivotY + cartH / 2') >= 0,
+  '倒立摆控制力在小车、关节力矩锚定摆杆');
+ok(chartsSrc.indexOf("view.kind !== 'tank'") >= 0, '液位对象不再绘制无关位置刻度');
+ok(chartsSrc.indexOf('tZ * 1.25') >= 0, '高度通道按目标高度构图');
+ok(/settleTol/.test(dataSrc) && /rateTol/.test(dataSrc), '定格收敛带由 PLANT_VIEWS 统一声明');
+ok(/details class="profile-block"[\s\S]{0,240}适用对象/.test(uiSrc) &&
+  uiSrc.indexOf('class="fit-details"') >= 0, '适用对象为折叠块');
+ok(uiSrc.indexOf('profileDisplayName(conf.name)') >= 0, '档案标题仅显示中文名');
+ok(chartsSrc.indexOf('pt.v * angK') >= 0 && chartsSrc.indexOf("°/s") >= 0,
+  '角度对象速度轴统一为 °/s');
+ok(css.indexOf('justify-content: safe center') >= 0, '长公式卡不再左右裁切');
+ok(chartsSrc.indexOf("view.kind !== 'tank' && view.kind !== 'altitude'") >= 0,
+  '液位/高度视图不画无关水平网格');
+
 /* ── 汇总 ── */
 console.log('\n════════════════════════════════');
 console.log('验收结果：' + pass + ' PASS / ' + fail + ' FAIL');
 if (fail) { console.log('存在未通过项，请修复后重跑。'); process.exit(1); }
-console.log('V6.0 静态验收全部通过。');
+console.log('V6.3 静态验收全部通过。');

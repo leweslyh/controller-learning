@@ -9,6 +9,15 @@
 
         const DT = 0.02; 
         const INITIAL_PARAMS = { m: 2.0, k: 1.0, c: 0.5, target: 5.0 };
+        /* 版本单一来源：前端标题、分享链接、导出件与后端健康检查都由这里取值 */
+        const VERSION = '6.3';
+        /* 会输出辅助参考流形（alg.ref_display）的方法清单：ui 图例与 charts 量程/绘制共用，
+           必须与 simulation.js 中写 ref_display 的分支一一对应（verify-v5.js 校验） */
+        const REF_FLOW_METHODS = [
+            'MRAC', 'MRAC-MIT', 'Composite-MRAC', 'L1', 'Flatness-Trajectory-Track',
+            'InputShaping', 'Posicast', 'PPC', 'Funnel-Control', 'TimeVary-BLF',
+            'RampSP-PID', 'TubeMPC', 'DMC-DynamicMatrix', 'Lorenz-Coupled'
+        ];
 
         // 全局符号字典定义
         const DICTIONARY_DATA = [
@@ -1300,7 +1309,7 @@
       restoring: () => 0,
       teaching: {
         title: '入门 · 有阻尼的双积分器',
-        body: '画面是**侧视图**：定子固定，转子带着负载盘绕轴转动。方程 $J\\ddot{\\theta}+b\\dot{\\theta}=\\tau$ 与「二阶积分器」只差一个阻尼项 $b\\dot{\\theta}$，但结论完全不同：\n\n' +
+        body: '画面是**侧视图**：定子固定，转子带着负载盘绕轴转动。直流伺服位置环是**机电伺服领域的标准基准对象**：转动惯量 $J$、粘性阻尼 $b$ 与电磁力矩 $\\tau$ 三个量就足以刻画它的全部动态。方程 $J\\ddot{\\theta}+b\\dot{\\theta}=\\tau$ 与「二阶积分器」只差一个阻尼项 $b\\dot{\\theta}$，但结论完全不同：\n\n' +
           '开环极点是 $0$ 与 $-b/J=-1.5$，都落在左半平面边界及以左，因此**纯 P 控制就能让转角停在目标**（直流增益为 1，没有静差）。切到「二阶积分器」对比：那边 $b=0$，纯 P 只会等幅振荡。\n\n' +
           '把 $b$ 拉到 0.1 再跑 P：阻尼变小，超调与振荡时间立刻变长——这就是「机械阻尼」与「电子阻尼（D 项）」在同一个极点图上竞争的过程。'
       }
@@ -1323,7 +1332,7 @@
       restoring: (s) => s.x,
       teaching: {
         title: '进阶 · 过阻尼过程与纯滞后',
-        body: '画面是**双水箱剖面**：左箱进液、右箱出液，两个液位通过连接管耦合。默认 $\\tau_1=2.0$、$\\tau_2=1.2$，等效 $m=2.4$、$c=3.2$、$k=1$，阻尼比 $\\zeta=c/(2\\sqrt{mk})=1.03>1$——**过阻尼，不会超调**，极点落在 $-0.50$ 与 $-0.83$。\n\n' +
+        body: '画面是**双水箱剖面**：左箱进液、右箱出液，两个液位通过连接管耦合。双容液位是**流程工业控制的标准基准对象**：两个一阶惯性环节串联，天然给出过阻尼二阶特性，常用来演示液位/温度/流量这类慢过程。默认 $\\tau_1=2.0$、$\\tau_2=1.2$，等效 $m=2.4$、$c=3.2$、$k=1$，阻尼比 $\\zeta=c/(2\\sqrt{mk})=1.03>1$——**过阻尼，不会超调**，极点落在 $-0.50$ 与 $-0.83$。\n\n' +
           '这说明一件事：在这个对象上"压超调"不是主要矛盾，工程上的主要矛盾是**慢**和**滞后**。把「纯滞后」调到 1.2 s，再用 PID：相位裕度被吃掉，增益一高就振荡；切到 [SmithPredict](method:SmithPredict) 或 [IMC](method:IMC)，模型里显式含有滞后/惯性，同样的增益就能稳住。'
       }
     },
@@ -1403,7 +1412,7 @@
   const PLANT_VIEWS = {
     msd: { kind: 'spring', symbol: 'x', stateName: '位置', rateName: '速度', rateSymbol: 'v', min: -2, max: 12, ticks: [0, 2, 4, 6, 8, 10], step: 0.5, decimals: 1 },
     freeMass: { kind: 'cart', symbol: 'x', stateName: '位置', rateName: '速度', rateSymbol: 'v', min: -2, max: 12, ticks: [0, 2, 4, 6, 8, 10], step: 0.5, decimals: 1 },
-    pendulum: { kind: 'pendulum', symbol: 'θ', stateName: '摆角', rateName: '角速度', rateSymbol: 'θ̇', min: -0.7, max: 0.7, ticks: [-0.5236, 0.5236], cartRange: 3, angular: true, deg: true, step: 0.05, decimals: 2 },
+    pendulum: { kind: 'pendulum', symbol: 'θ', stateName: '摆角', rateName: '角速度', rateSymbol: 'θ̇', min: -0.7, max: 0.7, ticks: [-0.5236, 0.5236], cartRange: 3, angular: true, deg: true, step: 0.05, decimals: 2, settleTol: 0.02, rateTol: 0.02, cartTol: 0.03 },
     aircraft: { kind: 'attitude', glyph: 'aircraft', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
     missile: { kind: 'attitude', glyph: 'missile', symbol: 'θ', stateName: '俯仰角', rateName: '俯仰角速度', rateSymbol: 'ω', min: -0.7, max: 0.7, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
     uav: { kind: 'attitude', glyph: 'uav', symbol: 'φ', stateName: '滚转角', rateName: '滚转角速度', rateSymbol: 'ω', min: -0.8, max: 0.8, ticks: [0.523599], angular: true, deg: true, step: 0.05, decimals: 2 },
@@ -1411,10 +1420,10 @@
        motor / pendulumDown 为角度量纲（内部 rad、显示 °）；
        tank / uavAlt 为平动量纲（m）；satellite 复用 attitude 量角器画法。 */
     motor: { kind: 'motor', symbol: 'θ', stateName: '转角', rateName: '角速度', rateSymbol: 'ω', min: -0.5, max: 1.8, ticks: [0, 0.523599, 1.047198, 1.570796], angular: true, deg: true, step: 0.05, decimals: 2 },
-    tank: { kind: 'tank', symbol: 'y', stateName: '液位', rateName: '液位变化率', rateSymbol: 'ẏ', min: 0, max: 1.2, ticks: [0, 0.3, 0.6, 0.9], step: 0.02, decimals: 2 },
+    tank: { kind: 'tank', symbol: 'y', stateName: '液位', rateName: '液位变化率', rateSymbol: 'ẏ', min: 0, max: 1.2, ticks: [0, 0.3, 0.6, 0.9], step: 0.02, decimals: 2, settleTol: 0.01, rateTol: 0.01 },
     pendulumDown: { kind: 'pendulumDown', symbol: 'θ', stateName: '摆角', rateName: '角速度', rateSymbol: 'θ̇', min: -0.7, max: 0.7, ticks: [0, 0.3], angular: true, deg: true, step: 0.02, decimals: 2 },
     satellite: { kind: 'attitude', glyph: 'satellite', symbol: 'θ', stateName: '姿态角', rateName: '姿态角速度', rateSymbol: 'ω', min: -0.6, max: 0.6, ticks: [0.2], angular: true, deg: true, step: 0.02, decimals: 2 },
-    uavAlt: { kind: 'altitude', symbol: 'z', stateName: '高度', rateName: '垂向速度', rateSymbol: 'ż', min: -0.5, max: 4, ticks: [0, 1, 2, 3], step: 0.05, decimals: 2 }
+    uavAlt: { kind: 'altitude', symbol: 'z', stateName: '高度', rateName: '垂向速度', rateSymbol: 'ż', min: 0, max: 4, ticks: [0, 1, 2, 3], step: 0.05, decimals: 2 }
   };
   /* 经典对决预设（移植自 index(14).html 的 PRESET_COMPARISONS）：
      一次性把两种流派各跑一段完整闭环，曲线叠加在同一坐标系里做公平比较。 */
@@ -1442,6 +1451,7 @@
   }
 
   NS.data = {
+    VERSION, REF_FLOW_METHODS,
     DT, INITIAL_PARAMS, DICTIONARY_DATA, CONTROLLER_CONFIGS,
     getDefaultParams, getTheoreticalOptimalSeed, SLIDING_META, SLIDING_MODES, fal, gaussNoise, calcGLWeights, getMembership,
     groupedMethods, sortedCategories, methodList,

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="控制理论模拟器：159 种控制算法、12 类理论体系、11 个被控对象与逐法初学者教学文档的离线交互实验台。">
-<title>纸面控制实验室 · V6.0</title>
+<title>纸面控制实验室 · V6.3</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="stylesheet" href="styles.css">
@@ -243,9 +243,9 @@
             <span class="status-item quality-item" id="status-quality" hidden><span class="dot" id="quality-dot"></span><span id="quality-text">调节中</span></span>
             <span class="status-sep" aria-hidden="true"></span>
             <span class="status-item" id="status-track">轨迹 A · 录制中</span>
-            <span class="status-item status-freeze" id="status-freeze" hidden>
+            <span class="status-item status-freeze" id="status-freeze" hidden title="误差与速度连续 2 秒进入收敛带（默认 0.02，双容液位 0.01；倒立摆还要求小车速度 &lt; 0.03），或曲线累计 2500 点">
               <svg class="icon" aria-hidden="true"><use href="#i-record"/></svg> 已定格
-              <button type="button" id="btn-rerecord" class="text-btn">重录</button>
+              <button type="button" id="btn-rerecord" class="text-btn" title="清空当前轨迹后重新录制">重录</button>
             </span>
           </div>
           <div class="charts-controls" role="group" aria-label="仿真速度">
@@ -340,7 +340,7 @@
     <span class="status-sep" aria-hidden="true"></span>
     <span class="status-item">邮箱 <a class="dev-mail" href="mailto:759528706@qq.com">759528706@qq.com</a></span>
     <span class="status-sep" aria-hidden="true"></span>
-    <span class="status-item">版本 V6.0 · 正式版</span>
+    <span class="status-item">版本 V6.3 · 正式版</span>
   </footer>
 </div>
 
@@ -609,7 +609,7 @@
     <span class="assistant-avatar" aria-hidden="true"><svg class="icon"><use href="#i-bot"/></svg></span>
     <div class="assistant-id">
       <strong id="assistant-title">控制助教</strong>
-      <small>DeepSeek · V6.0 知识库</small>
+      <small>DeepSeek · V6.3 知识库</small>
     </div>
     <span class="assistant-status is-idle" id="assistant-status" role="status">
       <span class="assistant-dot"></span><span id="assistant-status-text">未连接</span>
@@ -726,6 +726,8 @@
 <noscript><p class="noscript">本实验台需要启用 JavaScript 才能运行仿真；请开启后重新打开本文件。</p></noscript>
 
 <script src="vendor/katex/katex.min.js"></script>
+<!-- 跨模块共用工具（转义 / 图标 / 钳制 / 数值格式化 / 元素查询），必须先于其余 js 加载 -->
+<script src="js/core.js"></script>
 <script src="js/data.js"></script>
 <script src="js/method-meta.js"></script>
 <!-- 159 法的原论文出处（离线数据，运行时零网络请求） -->
